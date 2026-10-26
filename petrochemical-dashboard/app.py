@@ -80,9 +80,56 @@ st.markdown("""
 .panel-note { color: #7A8794; font-size: .75rem; line-height: 1.45; }
 div[data-testid="stPlotlyChart"] { background: #FFFFFF; border: 1px solid #DDE5EC; border-radius: 14px; padding: .38rem .45rem .1rem; box-shadow: 0 3px 10px rgba(16,42,58,.025); }
 div[data-testid="stDataFrame"] { border: 1px solid #DDE5EC; border-radius: 10px; overflow: hidden; }
-.stTabs [data-baseweb="tab-list"] { gap: .4rem; border-bottom: 1px solid #DDE5EC; }
-.stTabs [data-baseweb="tab"] { padding: .7rem 1rem; font-weight: 700; }
-.stTabs [aria-selected="true"] { color: #087E8B; }
+/* Streamlit toolbar fallback */
+[data-testid="stToolbar"],
+[data-testid="stDecoration"] {
+    display: none !important;
+}
+
+/* Top navigation */
+div[data-testid="stRadio"] {
+    margin-bottom: 1rem;
+}
+
+div[data-testid="stRadio"] [role="radiogroup"] {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 0 0.8rem;
+    border-bottom: 1px solid #DDE5EC;
+}
+
+div[data-testid="stRadio"] [role="radiogroup"] label {
+    background: #FFFFFF;
+    border: 1px solid #DDE5EC;
+    border-radius: 10px;
+    padding: 0.55rem 0.9rem;
+    margin: 0;
+    color: #526579;
+    font-weight: 650;
+}
+
+div[data-testid="stRadio"] input[type="radio"] {
+    accent-color: #087E8B;
+}
+
+div[data-testid="stRadio"] [role="radiogroup"]
+label:has(input:checked) {
+    background: #E5F4F4;
+    border-color: #087E8B;
+    color: #087E8B;
+}
+
+/* Chart cards */
+div[data-testid="stPlotlyChart"] {
+    overflow: hidden;
+    border: 1px solid #DDE5EC;
+    border-radius: 14px;
+    background: #FFFFFF;
+    padding: 0.3rem;
+    box-shadow: 0 3px 10px rgba(16, 42, 58, 0.025);
+}
 hr { border-color: #DDE5EC; }
 @media (max-width: 900px) { .hero .hero-title { font-size: 1.8rem; } .kpi-value { font-size: 1.45rem; } }
 </style>
@@ -240,9 +287,21 @@ years = sorted(data["Year"].dropna().unique().tolist())
 latest_year = max(years)
 latest_months = sorted(data.loc[data["Year"] == latest_year, "MonthNum"].unique().tolist())
 latest_partial = len(latest_months) < 12
-st.sidebar.markdown("<div class='eyebrow'>ANALYSIS CONTROLS</div>", unsafe_allow_html=True)
-st.sidebar.title("Build your view")
-st.sidebar.caption("Every visual and insight responds to these selections.")
+st.sidebar.markdown("---")
+
+st.sidebar.markdown("**Data source**")
+
+st.sidebar.caption(
+    "DGCIS monthly trade records · USD million"
+)
+
+st.sidebar.caption(
+    "HS chapters 27, 28, 29, 39 and 40"
+)
+
+st.sidebar.caption(
+    "Verify import/export direction in the source query."
+)
 
 def year_label(y):
     n = data.loc[data["Year"] == y, "MonthNum"].nunique()
@@ -347,17 +406,24 @@ with i3:
 
 st.write("")
 # Main navigation: each tab has a distinct analytical job.
-overview_tab, commodity_tab, partner_tab, data_tab = st.tabs([
-    "◈  Market overview",
-    "▤  Commodity intelligence",
-    "◎  Partner explorer",
-    "↗  Data & methodology",
-])
+# Main navigation
+selected_page = st.radio(
+    "Main navigation",
+    [
+        "Market overview",
+        "Commodity intelligence",
+        "Partner explorer",
+        "Data & methodology",
+    ],
+    horizontal=True,
+    label_visibility="collapsed",
+    key="main_navigation",
+)
 
 # -----------------------------------------------------------------------------
 # Overview tab
 # -----------------------------------------------------------------------------
-with overview_tab:
+if selected_page == "Market overview":
     st.write("")
     section("01 / Time series", "Is recorded value moving up or down?", "Compare each month with the same month in the prior year. This makes partial-year comparisons more meaningful.")
     trend_left, trend_right = st.columns([1.45, 1], gap="large")
@@ -437,11 +503,105 @@ with overview_tab:
         fig.update_layout(showlegend=False, xaxis_title="Value (US$ billion)", yaxis_title="")
         fig.update_xaxes(range=[0, float(top["Value_USD_Bn"].max()) * 1.22])
         st.plotly_chart(style_fig(fig, 400, horizontal=True), use_container_width=True, config={"displayModeBar": False})
+        st.write("")
 
+    section(
+        "04 / Partner momentum",
+        "Which major markets are growing or declining?",
+        "Bubble size represents current-period value. Colour represents "
+        "year-on-year growth against comparable months."
+    )
+
+    partner_now = (
+        named_current.groupby(
+            ["Country Name", "DisplayCountry"],
+            as_index=False
+        )["Value_USD_Mn"]
+        .sum()
+        .rename(columns={"Value_USD_Mn": "Current_Mn"})
+    )
+
+    partner_prev = (
+        named_prior.groupby(
+            "Country Name",
+            as_index=False
+        )["Value_USD_Mn"]
+        .sum()
+        .rename(columns={"Value_USD_Mn": "Prior_Mn"})
+    )
+
+    momentum = partner_now.merge(
+        partner_prev,
+        on="Country Name",
+        how="left",
+    )
+
+    momentum["Prior_Mn"] = momentum["Prior_Mn"].fillna(0)
+
+    # Growth needs a positive, comparable prior-year baseline.
+    momentum = momentum[momentum["Prior_Mn"] > 0].copy()
+
+    if not momentum.empty:
+        momentum["YoY change (%)"] = (
+            momentum["Current_Mn"] / momentum["Prior_Mn"] - 1
+        ) * 100
+
+        momentum["Current_USD_Bn"] = momentum["Current_Mn"] / 1000
+
+        # Focus the view on the 25 largest current-period markets.
+        momentum = momentum.nlargest(25, "Current_Mn")
+
+        fig = px.scatter(
+            momentum,
+            x="Current_USD_Bn",
+            y="YoY change (%)",
+            size="Current_USD_Bn",
+            color="YoY change (%)",
+            hover_name="DisplayCountry",
+            size_max=38,
+            color_continuous_scale=[
+                "#C2414B",
+                "#E8EDF2",
+                "#087E8B",
+            ],
+            labels={
+                "Current_USD_Bn": "Recorded value (US$ billion)",
+                "YoY change (%)": "YoY change (%)",
+            },
+            hover_data={
+                "Current_USD_Bn": ":.2f",
+                "YoY change (%)": ":.1f",
+                "Prior_Mn": False,
+            },
+        )
+
+        fig.add_hline(
+            y=0,
+            line_dash="dash",
+            line_color="#98A6B5",
+        )
+
+        fig.update_layout(
+            coloraxis_colorbar_title="YoY %",
+            xaxis_title="Current-period value (US$ billion)",
+            yaxis_title="YoY change (%)",
+        )
+
+        st.plotly_chart(
+            style_fig(fig, 420),
+            use_container_width=True,
+            config={"displayModeBar": False, "responsive": True},
+        )
+
+    else:
+        st.info(
+            "Comparable positive prior-year values are unavailable "
+            "for the selected filters."
+        )
 # -----------------------------------------------------------------------------
 # Commodity intelligence tab
 # -----------------------------------------------------------------------------
-with commodity_tab:
+if selected_page == "Commodity intelligence":
     st.write("")
     section("04 / Commodity performance", "Which commodity groups are gaining or losing ground?", "Year-on-year values compare the selected year with the same months in the previous year. Percentages are not calculated where no positive baseline exists.")
 
@@ -504,11 +664,64 @@ with commodity_tab:
         st.plotly_chart(style_fig(fig, 300), use_container_width=True, config={"displayModeBar": False})
     else:
         st.info("Monthly values are not available for the current selection.")
+    st.write("")
+
+    section(
+        "06 / Commodity composition",
+        "Where is recorded value concentrated?",
+        "Tile area represents each commodity group's recorded value "
+        "during the selected period."
+    )
+
+    treemap_data = (
+        current.groupby("Commodity", as_index=False)["Value_USD_Bn"]
+        .sum()
+        .sort_values("Value_USD_Bn", ascending=False)
+    )
+
+    if not treemap_data.empty:
+        fig = px.treemap(
+            treemap_data,
+            path=["Commodity"],
+            values="Value_USD_Bn",
+            color="Value_USD_Bn",
+            color_continuous_scale=[
+                "#DDEFF0",
+                "#6DA9BC",
+                "#087E8B",
+                "#142B3B",
+            ],
+            labels={
+                "Commodity": "Commodity group",
+                "Value_USD_Bn": "Value (US$ billion)",
+            },
+        )
+
+        fig.update_traces(
+            texttemplate="%{label}<br>US$%{value:.2f}B",
+            hovertemplate=(
+                "<b>%{label}</b><br>"
+                "Recorded value: US$%{value:.2f}B"
+                "<extra></extra>"
+            ),
+        )
+
+        fig.update_layout(
+            coloraxis_showscale=False,
+            margin=dict(l=10, r=10, t=15, b=10),
+        )
+
+        st.plotly_chart(
+            style_fig(fig, 370),
+            use_container_width=True,
+            config={"displayModeBar": False, "responsive": True},
+        )
+    
 
 # -----------------------------------------------------------------------------
 # Partner explorer tab
 # -----------------------------------------------------------------------------
-with partner_tab:
+if selected_page == "Partner explorer":
     st.write("")
     section("06 / Partner-market drill-down", "Explore one trading partner in detail", "Choose a named market to compare its selected-period value, comparable prior-year value and commodity mix.")
     partner_options_df = partner_totals.copy()
@@ -592,7 +805,7 @@ with partner_tab:
 # -----------------------------------------------------------------------------
 # Data & methodology tab
 # -----------------------------------------------------------------------------
-with data_tab:
+elif selected_page == "Data & methodology":
     st.write("")
     section("07 / Data explorer", "Inspect and export the underlying records", "The table uses the selected analysis year and commodity filters. Values are presented in US dollars million, as supplied by the source CSV.")
     search = st.text_input("Search country or commodity", placeholder="e.g. United States, plastics, organic chemicals")
