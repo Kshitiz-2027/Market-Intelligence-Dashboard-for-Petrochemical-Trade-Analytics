@@ -18,7 +18,7 @@ st.set_page_config(
     page_title="PetroTrade Intelligence",
     page_icon="◈",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 DATA_FILE = Path(__file__).parent / "DGCIS_DATA.csv"
@@ -64,64 +64,89 @@ EXCLUDED_MARKETS = {
     "TOTAL", "ALL COUNTRIES", "WORLD TOTAL", "UNSPECIFIED", "NOT SPECIFIED", "OTHERS", "OTHER", ""
 }
 FLOW_NAMES = ["Imports", "Exports", "Direction not verified"]
-PALETTE = ["#087E8B", "#315B75", "#6DA9BC", "#D39B49", "#8A9BA8", "#8E79B7"]
-TEAL = "#087E8B"
-NAVY = "#142B3B"
-SLATE = "#667085"
-GREEN = "#16794B"
-RED = "#C2414B"
+PALETTE = ["#E46F4A", "#365B78", "#6E9F93", "#E0B15A", "#83919B", "#8E83B8"]
+TEAL = "#E46F4A"
+NAVY = "#172A3A"
+SLATE = "#68727D"
+GREEN = "#23745B"
+RED = "#C84F4F"
 
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 :root { color-scheme: light; }
-.block-container { padding-top: 1.1rem; padding-bottom: 2.8rem; max-width: 1600px; }
-[data-testid="stSidebar"] { background: #F1F5F8; border-right: 1px solid #DCE4EB; }
+html, body, [class*="css"], [data-testid="stAppViewContainer"] {
+  font-family: 'DM Sans', 'Segoe UI', sans-serif !important;
+}
+[data-testid="stAppViewContainer"] { background: #F5F3EE; color: #172A3A; }
+.block-container { padding-top: 1.1rem; padding-bottom: 3rem; max-width: 1660px; }
+h1, h2, h3, h4, h5, h6, .hero-title, .section-title, .control-deck-title {
+  font-family: 'Space Grotesk', 'DM Sans', 'Segoe UI', sans-serif !important;
+  letter-spacing: -0.035em;
+}
+[data-testid="stSidebar"] { background: #ECE8E0; border-right: 1px solid #E3DED4; }
 [data-testid="stSidebar"] > div { padding-top: 1.15rem; }
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #526579; }
-/* Hide Streamlit's toolbar in the local app; config.toml also sets minimal toolbar mode. */
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #53616D; }
 [data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
 #MainMenu { visibility: hidden; }
 footer { visibility: hidden; }
-.eyebrow { font-size: .70rem; letter-spacing: .17em; font-weight: 800; color: #0C8995; text-transform: uppercase; }
-.hero { background: linear-gradient(120deg, #102A3A 0%, #183C50 58%, #17616A 100%); color: white; padding: 1.75rem 1.9rem; border-radius: 18px; margin: .1rem 0 1.0rem 0; box-shadow: 0 10px 28px rgba(20,43,59,.10); animation: fadeSlideIn .65s ease both; }
-.hero .hero-eyebrow { color: #7BD0D0; font-size: .70rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; margin-bottom: .55rem; }
-.hero .hero-title { font-size: 2.35rem; font-weight: 850; line-height: 1.08; letter-spacing: -.045em; margin: 0 0 .55rem; }
-.hero .hero-sub { max-width: 920px; color: #D4E2EA; font-size: .98rem; line-height: 1.6; }
-.hero-meta { display: flex; gap: .55rem; flex-wrap: wrap; margin-top: 1.1rem; }
-.hero-chip { display: inline-block; border: 1px solid rgba(255,255,255,.23); color: #E9F5F6; background: rgba(255,255,255,.08); padding: .35rem .65rem; border-radius: 999px; font-size: .73rem; }
-/* Radio navigation is used as a compact top navigation bar. */
-div[data-testid="stRadio"] { margin: .2rem 0 .85rem; }
-div[data-testid="stRadio"] [role="radiogroup"] { display: flex; flex-direction: row; flex-wrap: wrap; gap: .45rem; padding: .35rem 0 .75rem; border-bottom: 1px solid #DDE5EC; }
-div[data-testid="stRadio"] [role="radiogroup"] label { background: #FFFFFF; border: 1px solid #DDE5EC; border-radius: 10px; padding: .5rem .85rem; margin: 0; color: #526579; font-weight: 680; transition: transform .2s ease, border-color .2s ease, background .2s ease; }
-div[data-testid="stRadio"] [role="radiogroup"] label:hover { transform: translateY(-2px); border-color: #087E8B; }
-div[data-testid="stRadio"] input[type="radio"] { accent-color: #087E8B; }
-div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) { background: #E5F4F4; border-color: #087E8B; color: #087E8B; }
-.section-kicker { font-size: .70rem; letter-spacing: .14em; text-transform: uppercase; font-weight: 800; color: #087E8B; margin: .25rem 0 .23rem; }
-.section-title { font-size: 1.35rem; letter-spacing: -.025em; font-weight: 790; color: #142B3B; margin: 0 0 .2rem; }
-.section-note { font-size: .87rem; line-height: 1.55; color: #667085; margin: 0 0 .85rem; }
-.kpi-card { background: #FFFFFF; border: 1px solid #DDE5EC; border-top: 3px solid #087E8B; border-radius: 14px; padding: 1.05rem 1.1rem .95rem; min-height: 126px; box-shadow: 0 3px 10px rgba(16,42,58,.035); animation: fadeSlideIn .55s ease both; transition: transform .22s ease, box-shadow .22s ease; }
-.kpi-card:hover { transform: translateY(-4px); box-shadow: 0 12px 25px rgba(16,42,58,.10); }
-.kpi-label { color: #667085; font-size: .77rem; font-weight: 720; margin-bottom: .50rem; letter-spacing: .025em; }
-.kpi-value { color: #142B3B; font-size: 1.78rem; line-height: 1.1; letter-spacing: -.035em; font-weight: 840; }
-.kpi-foot { color: #748394; font-size: .76rem; margin-top: .55rem; line-height: 1.35; }
-.insight-grid-card { background: white; border: 1px solid #DFE6EC; border-radius: 12px; padding: .95rem; min-height: 116px; box-shadow: 0 2px 8px rgba(16,42,58,.025); animation: fadeSlideIn .6s ease both; transition: transform .2s ease, box-shadow .2s ease; }
-.insight-grid-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(16,42,58,.07); }
-.insight-mark { display: inline-flex; align-items:center; justify-content:center; width: 30px; height: 30px; background:#E5F4F4; color:#087E8B; border-radius:9px; font-size:.9rem; font-weight:850; margin-bottom:.6rem; }
-.insight-label { color: #667085; text-transform: uppercase; letter-spacing: .105em; font-size: .66rem; font-weight: 850; margin-bottom: .32rem; }
-.insight-text { color: #263D4E; font-size: .88rem; line-height: 1.52; }
-.callout { background: #FFF8E8; border: 1px solid #F0D89E; color: #6E531F; border-radius: 10px; padding: .7rem .9rem; font-size: .82rem; line-height: 1.5; margin: .4rem 0 .8rem; }
-.info-panel { background: #F3F8FA; border: 1px solid #D8E7ED; border-radius: 13px; padding: 1rem 1.1rem; margin: .4rem 0 .9rem; color: #365164; line-height: 1.55; }
-.info-panel b { color: #142B3B; }
-.panel-note { color: #7A8794; font-size: .75rem; line-height: 1.45; }
-/* Charts animate into view and gently lift on hover. Plotly itself supplies hover/zoom/legend interactions. */
-div[data-testid="stPlotlyChart"] { background: #FFFFFF; border: 1px solid #DDE5EC; border-radius: 14px; padding: .35rem .4rem .08rem; box-shadow: 0 3px 10px rgba(16,42,58,.025); animation: chartEnter .72s cubic-bezier(.2,.75,.3,1) both; transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease; }
-div[data-testid="stPlotlyChart"]:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(16,42,58,.085); border-color: #B8D6DD; }
-div[data-testid="stDataFrame"] { border: 1px solid #DDE5EC; border-radius: 10px; overflow: hidden; }
-hr { border-color: #DDE5EC; }
-@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes chartEnter { from { opacity: .25; transform: translateY(12px) scale(.992); } to { opacity: 1; transform: translateY(0) scale(1); } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
-@media (max-width: 900px) { .hero .hero-title { font-size: 1.8rem; } .kpi-value { font-size: 1.45rem; } }
+.eyebrow { font-size: .70rem; letter-spacing: .17em; font-weight: 800; color: #E46F4A; text-transform: uppercase; }
+.hero {
+  background: linear-gradient(115deg, #172A3A 0%, #243847 68%, #344E5B 100%);
+  color: white; padding: 1.9rem 2rem; border-radius: 13px 26px 13px 26px;
+  margin: .1rem 0 1rem; border-left: 5px solid #E46F4A;
+  box-shadow: 0 14px 32px rgba(23,42,58,.12); animation: fadeSlideIn .55s ease both;
+}
+.hero .hero-eyebrow { color: #F2A78E; font-size: .69rem; font-weight: 800; letter-spacing: .19em; text-transform: uppercase; margin-bottom: .6rem; }
+.hero .hero-title { font-size: 2.45rem; font-weight: 750; line-height: 1.07; letter-spacing: -.055em; margin: 0 0 .55rem; }
+.hero .hero-sub { max-width: 940px; color: #E0E7E9; font-size: .98rem; line-height: 1.65; }
+.hero-meta { display: flex; gap: .55rem; flex-wrap: wrap; margin-top: 1.15rem; }
+.hero-chip { display: inline-block; border: 1px solid rgba(255,255,255,.20); color: #F5F3EE; background: rgba(255,255,255,.075); padding: .35rem .68rem; border-radius: 6px; font-size: .73rem; }
+/* Top navigation */
+div[data-testid="stRadio"] { margin: .2rem 0 .9rem; }
+div[data-testid="stRadio"] [role="radiogroup"] { display:flex; flex-direction:row; flex-wrap:wrap; gap:.5rem; padding:.35rem 0 .8rem; border-bottom:1px solid #DED9CF; }
+div[data-testid="stRadio"] [role="radiogroup"] label { background:#FFFEFC; border:1px solid #DED9CF; border-radius:8px; padding:.54rem .9rem; margin:0; color:#53616D; font-weight:650; transition:transform .18s ease, border-color .18s ease, background .18s ease; }
+div[data-testid="stRadio"] [role="radiogroup"] label:hover { transform:translateY(-2px); border-color:#E46F4A; }
+div[data-testid="stRadio"] input[type="radio"] { accent-color:#E46F4A; }
+div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) { background:#FBE8DF; border-color:#E46F4A; color:#A94328; }
+/* Inputs and selections */
+[data-baseweb="select"] > div { border-color:#DED9CF !important; border-radius:8px !important; }
+[data-baseweb="tag"] { background:#E46F4A !important; border-radius:5px !important; }
+[data-baseweb="tag"] span { color:#FFFFFF !important; }
+button[kind="primary"] { background:#E46F4A !important; border-color:#E46F4A !important; }
+button[kind="primary"]:hover { background:#C95C3B !important; border-color:#C95C3B !important; }
+.section-kicker { font-size:.68rem; letter-spacing:.16em; text-transform:uppercase; font-weight:850; color:#C95C3B; margin:.25rem 0 .28rem; }
+.section-title { font-size:1.4rem; letter-spacing:-.04em; font-weight:750; color:#172A3A; margin:0 0 .22rem; }
+.section-note { font-size:.88rem; line-height:1.58; color:#68727D; margin:0 0 .9rem; }
+.kpi-card { background:#FFFEFC; border:1px solid #E3DED4; border-top:3px solid #E46F4A; border-radius:10px 18px 10px 18px; padding:1.1rem 1.15rem 1rem; min-height:128px; box-shadow:0 4px 12px rgba(23,42,58,.035); animation:fadeSlideIn .5s ease both; transition:transform .2s ease,box-shadow .2s ease; }
+.kpi-card:hover { transform:translateY(-3px); box-shadow:0 12px 25px rgba(23,42,58,.09); }
+.kpi-label { color:#68727D; font-size:.75rem; font-weight:750; margin-bottom:.52rem; letter-spacing:.045em; }
+.kpi-value { color:#172A3A; font-family:'Space Grotesk','DM Sans',sans-serif; font-size:1.82rem; line-height:1.1; letter-spacing:-.045em; font-weight:700; }
+.kpi-foot { color:#737C84; font-size:.76rem; margin-top:.6rem; line-height:1.4; }
+.insight-grid-card { background:#FFFEFC; border:1px solid #E3DED4; border-radius:10px 16px 10px 16px; padding:1rem; min-height:118px; box-shadow:0 2px 8px rgba(23,42,58,.025); animation:fadeSlideIn .55s ease both; transition:transform .18s ease,box-shadow .18s ease; }
+.insight-grid-card:hover { transform:translateY(-3px); box-shadow:0 10px 20px rgba(23,42,58,.065); }
+.insight-mark { display:inline-flex; align-items:center; justify-content:center; width:31px; height:31px; background:#FBE8DF; color:#C95C3B; border-radius:8px; font-size:.9rem; font-weight:850; margin-bottom:.62rem; }
+.insight-label { color:#68727D; text-transform:uppercase; letter-spacing:.11em; font-size:.65rem; font-weight:850; margin-bottom:.35rem; }
+.insight-text { color:#263844; font-size:.88rem; line-height:1.55; }
+.callout { background:#FFF5E7; border:1px solid #E7C98C; color:#74532B; border-radius:8px; padding:.75rem .95rem; font-size:.83rem; line-height:1.55; margin:.4rem 0 .85rem; }
+.info-panel { background:#F0EEE8; border:1px solid #E3DED4; border-left:3px solid #E46F4A; border-radius:8px 14px 8px 14px; padding:1rem 1.15rem; margin:.4rem 0 .95rem; color:#4B5D68; line-height:1.6; }
+.info-panel b { color:#172A3A; }
+.panel-note { color:#7A838B; font-size:.75rem; line-height:1.48; }
+/* Chart cards */
+div[data-testid="stPlotlyChart"] { background:#FFFEFC; border:1px solid #E3DED4; border-radius:10px 18px 10px 18px; padding:.38rem .42rem .08rem; box-shadow:0 3px 11px rgba(23,42,58,.025); animation:chartEnter .58s cubic-bezier(.2,.75,.3,1) both; transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease; }
+div[data-testid="stPlotlyChart"]:hover { transform:translateY(-2px); box-shadow:0 12px 25px rgba(23,42,58,.08); border-color:#E8B6A5; }
+div[data-testid="stDataFrame"] { border:1px solid #E3DED4; border-radius:9px; overflow:hidden; }
+.control-deck { background:linear-gradient(180deg,#FFFEFC 0%,#F8F6F1 100%); border:1px solid #E3DED4; border-radius:12px 20px 12px 20px; padding:1.1rem 1.2rem .5rem; margin:.7rem 0 1rem; box-shadow:0 6px 18px rgba(23,42,58,.04); }
+.control-deck-title { color:#172A3A; font-size:1.08rem; font-weight:750; margin-bottom:.12rem; }
+.control-deck-sub { color:#68727D; font-size:.82rem; margin-bottom:.8rem; line-height:1.5; }
+.scope-strip { display:flex; align-items:center; flex-wrap:wrap; gap:.55rem; background:#F0EEE8; border:1px solid #E3DED4; color:#405461; border-radius:8px; padding:.62rem .85rem; margin:.65rem 0 .95rem; font-size:.79rem; }
+.scope-pill { background:#FFFEFC; border:1px solid #DED9CF; border-radius:6px; padding:.27rem .58rem; color:#263844; font-weight:700; }
+div[data-testid="stForm"] { background:#F8F6F1; border:1px solid #E3DED4; border-radius:10px; padding:.75rem; }
+hr { border-color:#E3DED4; }
+@keyframes fadeSlideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes chartEnter { from { opacity:.35; transform:translateY(8px) scale(.996); } to { opacity:1; transform:translateY(0) scale(1); } }
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; } }
+@media (max-width:900px) { .hero .hero-title { font-size:1.85rem; } .kpi-value { font-size:1.48rem; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -240,14 +265,14 @@ def style_fig(fig, height=360, legend=True):
         margin=dict(l=18, r=28, t=40, b=24),
         paper_bgcolor="rgba(255,255,255,0)",
         plot_bgcolor="rgba(255,255,255,0)",
-        font=dict(family="Inter, Segoe UI, Arial, sans-serif", color="#526579", size=12),
-        hoverlabel=dict(bgcolor="#142B3B", font_color="#FFFFFF", bordercolor="#142B3B"),
-        legend=dict(font=dict(color="#526579", size=11), bgcolor="rgba(255,255,255,0)"),
+        font=dict(family="DM Sans, Segoe UI, sans-serif", color="#53616D", size=12),
+        hoverlabel=dict(bgcolor="#172A3A", font_color="#FFFFFF", bordercolor="#172A3A"),
+        legend=dict(font=dict(color="#53616D", size=11), bgcolor="rgba(255,255,255,0)"),
         showlegend=legend,
         transition=dict(duration=450, easing="cubic-in-out"),
     )
-    fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#D6DEE6", ticks="outside")
-    fig.update_yaxes(showgrid=True, gridcolor="#EDF1F5", zeroline=False, linecolor="#D6DEE6", ticks="outside")
+    fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#D8D2C7", ticks="outside")
+    fig.update_yaxes(showgrid=True, gridcolor="#ECE8E0", zeroline=False, linecolor="#D8D2C7", ticks="outside")
     return fig
 
 
@@ -321,26 +346,43 @@ def build_commodity_ledger(current_data, prior_data, commodity_names, available_
 
 
 # =============================================================================
-# Sidebar: data direction and file loading
+# Main-canvas intro + data-source setup
 # =============================================================================
-if not DATA_FILE.exists():
-    st.error("DGCIS_DATA.csv was not found. Place it in the same folder as app.py.")
-    st.stop()
-
-st.sidebar.markdown("<div class='eyebrow'>WORKSPACE</div>", unsafe_allow_html=True)
-st.sidebar.title("PetroTrade controls")
-st.sidebar.caption("Choose your time window, commodity groups, and data flows. Charts and tables update automatically.")
-
-base_flow = st.sidebar.selectbox(
-    "DGCIS_DATA.csv represents",
-    ["Direction not verified", "Imports", "Exports"],
-    index=0,
-    help="Only select Imports or Exports after confirming the DGCIS query settings used to download this CSV.",
+st.markdown(
+    "<div class='hero'><div class='hero-eyebrow'>INDIA TRADE INTELLIGENCE · MARKET WORKSPACE</div>"
+    "<div class='hero-title'>PetroTrade Intelligence</div>"
+    "<div class='hero-sub'>Explore petroleum-related and downstream material trade through live filters, commodity comparisons, partner-market rankings, and year-on-year analysis. Select the slice of the market you want to understand; the headline metrics and charts recalculate from the underlying DGCIS records.</div>"
+    "<div class='hero-meta'><span class='hero-chip'>Interactive analysis workspace</span><span class='hero-chip'>HS chapters 27 · 28 · 29 · 39 · 40</span><span class='hero-chip'>Monthly trade records</span></div></div>",
+    unsafe_allow_html=True,
 )
-st.sidebar.markdown("**Optional: add separate trade-flow files**")
-imports_upload = st.sidebar.file_uploader("Import dataset CSV", type=["csv"], key="imports_csv")
-exports_upload = st.sidebar.file_uploader("Export dataset CSV", type=["csv"], key="exports_csv")
-st.sidebar.caption("For a real import/export comparison, supply one Imports CSV and one Exports CSV with matching HS chapters and periods.")
+
+with st.expander("Data connections · label the primary file and add import/export datasets", expanded=False):
+    source_left, source_right = st.columns([1, 1.35], gap="large")
+    with source_left:
+        if DATA_FILE.exists():
+            base_bytes = DATA_FILE.read_bytes()
+            st.caption("Primary dataset found: DGCIS_DATA.csv")
+        else:
+            primary_upload = st.file_uploader("Upload primary DGCIS CSV", type=["csv"], key="primary_trade_csv_main")
+            base_bytes = primary_upload.getvalue() if primary_upload is not None else None
+        base_flow = st.selectbox(
+            "Primary dataset direction",
+            ["Direction not verified", "Imports", "Exports"],
+            index=0,
+            key="primary_flow_direction_main",
+            help="Choose Imports or Exports only after confirming the DGCIS query settings used to download this file.",
+        )
+    with source_right:
+        upload_a, upload_b = st.columns(2)
+        with upload_a:
+            imports_upload = st.file_uploader("Additional imports CSV", type=["csv"], key="imports_csv_main")
+        with upload_b:
+            exports_upload = st.file_uploader("Additional exports CSV", type=["csv"], key="exports_csv_main")
+        st.caption("For a real import/export comparison, load direction-verified files with matching HS chapters and comparable reporting months. The app never infers direction from values.")
+
+if not DATA_FILE.exists() and base_bytes is None:
+    st.info("Upload a primary DGCIS CSV in Data connections to start the analysis.")
+    st.stop()
 
 try:
     base_bytes = DATA_FILE.read_bytes()
@@ -377,24 +419,117 @@ def year_label(y):
     months = sorted(data.loc[data["Year"] == y, "MonthNum"].unique().tolist())
     return f"{y} · YTD ({len(months)} months)" if len(months) < 12 else str(y)
 
-selected_year = st.sidebar.selectbox("Analysis year", years, index=years.index(latest_year), format_func=year_label)
-commodity_options = sorted(data["Commodity"].dropna().unique().tolist(), key=lambda c: next((k for k, v in COMMODITY_INFO.items() if v["commodity"] == c), 999))
-selected_commodities = st.sidebar.multiselect("Commodity groups", commodity_options, default=commodity_options)
+
+commodity_options = sorted(
+    data["Commodity"].dropna().unique().tolist(),
+    key=lambda c: next((k for k, v in COMMODITY_INFO.items() if v["commodity"] == c), 999),
+)
+category_options = sorted(data["Commodity Category"].dropna().unique().tolist())
+market_options = sorted(named_rows(data)["DisplayCountry"].dropna().unique().tolist())
+available_flows = sorted(data["Trade Flow"].dropna().unique().tolist())
+
+section("LIVE ANALYSIS CONTROLS", "Build your market view", "These are live inputs, not decoration. Changing the reporting period, commodity scope, partner market, or chart style recalculates the dashboard from the selected records.")
+with st.container(border=True):
+    row_one = st.columns([0.8, 1.45, 1.35], gap="medium")
+    with row_one[0]:
+        selected_year = st.selectbox(
+            "Reporting year",
+            years,
+            index=years.index(latest_year),
+            format_func=year_label,
+            key="workspace_year_main",
+        )
+    available_month_nums = select_months_for_flows(data, selected_year)
+    available_month_labels = [MONTH_ORDER[m - 1] for m in available_month_nums]
+    with row_one[1]:
+        selected_month_labels = st.multiselect(
+            "Months included",
+            options=available_month_labels,
+            default=available_month_labels,
+            key=f"workspace_months_{selected_year}",
+            help="Choose a custom time window. Year-on-year comparison will use these same months in the prior year.",
+        )
+    with row_one[2]:
+        selected_market = st.selectbox(
+            "Partner market",
+            ["All partner markets"] + market_options,
+            index=0,
+            key="workspace_market_main",
+            help="Choose a country to focus all KPIs and charts on that market, or keep All partner markets.",
+        )
+
+    row_two = st.columns([1.15, 1.45, 0.8, 0.9], gap="medium")
+    with row_two[0]:
+        selected_categories = st.multiselect(
+            "Commodity families",
+            options=category_options,
+            default=category_options,
+            key="workspace_categories_main",
+            help="High-level grouping for the selected HS chapters.",
+        )
+    # Keep the chapter selector consistent with the selected families.
+    family_chapter_options = sorted(
+        data.loc[data["Commodity Category"].isin(selected_categories), "Commodity"].dropna().unique().tolist(),
+        key=lambda name: int(data.loc[data["Commodity"] == name, "HS Code"].iloc[0]),
+    )
+    prior_chapter_state = st.session_state.get("workspace_commodities_main", commodity_options)
+    if "workspace_commodities_main" in st.session_state:
+        cleaned_chapters = [name for name in prior_chapter_state if name in family_chapter_options]
+        if cleaned_chapters != prior_chapter_state:
+            st.session_state["workspace_commodities_main"] = cleaned_chapters or family_chapter_options
+    with row_two[1]:
+        selected_commodities = st.multiselect(
+            "HS commodity chapters",
+            options=family_chapter_options,
+            default=family_chapter_options,
+            key="workspace_commodities_main",
+            help="Choose HS chapters within the selected families. Available groups: 27, 28, 29, 39 and 40.",
+            format_func=lambda name: f"HS {int(data.loc[data['Commodity'] == name, 'HS Code'].iloc[0])} · {name}" if not data.loc[data["Commodity"] == name, "HS Code"].empty else name,
+        )
+    with row_two[2]:
+        selected_trend_style = st.selectbox(
+            "Trend chart style",
+            ["Line", "Area", "Grouped bars"],
+            index=0,
+            key="workspace_trend_style_main",
+        )
+    with row_two[3]:
+        top_partner_count = st.selectbox(
+            "Markets to rank",
+            [5, 10, 15, 20],
+            index=1,
+            key="workspace_top_markets_main",
+        )
+    st.caption("Changes apply to every page immediately. Use the top navigation below to switch between the overview, commodity breakdown, trade flows, partner markets, and data explorer.")
+
+if not selected_categories:
+    st.warning("Select at least one commodity family in the live controls to continue.")
+    st.stop()
 if not selected_commodities:
-    st.warning("Select at least one commodity group in the sidebar to continue.")
+    st.warning("Select at least one HS commodity chapter in the live controls to continue.")
+    st.stop()
+if not selected_month_labels:
+    st.warning("Select at least one month in the live controls to continue.")
     st.stop()
 
-available_flows = sorted(data["Trade Flow"].dropna().unique().tolist())
-months_present = select_months_for_flows(data, selected_year)
+months_present = sorted([MONTH_ORDER.index(m) + 1 for m in selected_month_labels])
 if not months_present:
-    st.error("No months are available for the selected year.")
+    st.error("No months are available for the selected reporting year.")
     st.stop()
 
 # Apply the same months to all flows for fair import/export and YoY comparisons.
-base_filtered = data[data["Commodity"].isin(selected_commodities)].copy()
+base_filtered = data[
+    data["Commodity"].isin(selected_commodities)
+    & data["Commodity Category"].isin(selected_categories)
+].copy()
+if selected_market != "All partner markets":
+    base_filtered = base_filtered[base_filtered["DisplayCountry"] == selected_market].copy()
 current = base_filtered[(base_filtered["Year"] == selected_year) & base_filtered["MonthNum"].isin(months_present)].copy()
 prior_year = selected_year - 1
 prior = base_filtered[(base_filtered["Year"] == prior_year) & base_filtered["MonthNum"].isin(months_present)].copy()
+if current.empty:
+    st.warning("No records match this combination of period, commodity and partner filters. Widen the live controls above and try again.")
+    st.stop()
 partial = len(months_present) < 12
 period_start = pd.Timestamp(year=2000, month=min(months_present), day=1).strftime("%b")
 period_end = pd.Timestamp(year=2000, month=max(months_present), day=1).strftime("%b")
@@ -422,14 +557,17 @@ has_exports = "Exports" in known_flows
 has_both_flows = has_imports and has_exports
 
 # =============================================================================
-# Global hero and top navigation
+# Applied scope ribbon and top navigation
 # =============================================================================
+market_label = selected_market if selected_market != "All partner markets" else "All partner markets"
+month_window_label = ", ".join(month_labels)
 st.markdown(
-    f"<div class='hero'><div class='hero-eyebrow'>INDIA TRADE INTELLIGENCE · {safe(year_label(selected_year))}</div>"
-    f"<div class='hero-title'>PetroTrade Intelligence</div>"
-    f"<div class='hero-sub'>A market intelligence workspace for petroleum-related and downstream material trade. Explore commodity categories, compare yearly import/export values when both flows are supplied, and uncover which partner markets account for recorded value.</div>"
-    f"<div class='hero-meta'><span class='hero-chip'>DGCIS source extract</span><span class='hero-chip'>{safe(period_label)}</span>"
-    f"<span class='hero-chip'>{len(selected_commodities)} commodity groups selected</span><span class='hero-chip'>{len(known_flows)} data flow(s) loaded</span></div></div>",
+    "<div class='scope-strip'><b>LIVE VIEW</b>"
+    f"<span class='scope-pill'>{safe(period_label)}</span>"
+    f"<span class='scope-pill'>{len(selected_commodities)} HS chapters</span>"
+    f"<span class='scope-pill'>{safe(market_label)}</span>"
+    f"<span class='scope-pill'>{safe(month_window_label)}</span>"
+    f"<span class='scope-pill'>{len(known_flows)} flow(s) loaded</span></div>",
     unsafe_allow_html=True,
 )
 
@@ -459,10 +597,10 @@ if partial:
 # PAGE 1: OVERVIEW
 # =============================================================================
 if page == "Overview":
-    section("WELCOME / START HERE", "From raw trade records to market signals", "Use this page for a quick executive view. Move to the other pages for commodity-level breakdowns, import/export comparison, partner-market exploration, and downloadable records.")
+    section("WELCOME / START HERE", "From raw trade records to market signals", "Use the live controls above to change the year, months, commodity families, HS chapters, partner market, chart style and market-ranking depth. This page recalculates headline KPIs and the scenario lab from your selected data.")
     st.markdown(
         "<div class='info-panel'><b>How to use PetroTrade:</b><br>"
-        "<b>1. Choose the year and commodity groups</b> from the left panel. All metrics and charts respond to these filters.<br>"
+        "<b>1. Use the live controls above</b> to choose year, months, commodity families, HS chapters, and partner market. All metrics and charts respond to these inputs.<br>"
         "<b>2. Read the signals</b> to see the largest commodity group, the leading named partner, and the strongest month in the selected period.<br>"
         "<b>3. Explore a question</b> using Commodity breakdown, Imports vs exports, or Partner markets in the top navigation.<br>"
         "<b>4. Export evidence</b> from Data & methodology for further analysis. Values are in US dollars; chart scales use billions for readability.</div>",
@@ -476,9 +614,9 @@ if page == "Overview":
     with c2:
         kpi_card("YEAR-ON-YEAR CHANGE", fmt_pct(yoy_total), f"vs. comparable months in {prior_year}", GREEN if pd.notna(yoy_total) and yoy_total >= 0 else RED)
     with c3:
-        kpi_card("LEADING COMMODITY SHARE", f"{leader_share:.1f}%" if pd.notna(leader_share) else "—", f"{leader['Commodity']} · {fmt_money_mn(leader['Value_USD_Mn'])}" if leader is not None else "No value available", "#315B75")
+        kpi_card("LEADING COMMODITY SHARE", f"{leader_share:.1f}%" if pd.notna(leader_share) else "—", f"{leader['Commodity']} · {fmt_money_mn(leader['Value_USD_Mn'])}" if leader is not None else "No value available", "#365B78")
     with c4:
-        kpi_card("NAMED PARTNER MARKETS", f"{active_markets:,}", "Positive-value named markets", "#D39B49")
+        kpi_card("NAMED PARTNER MARKETS", f"{active_markets:,}", "Positive-value named markets", "#E0B15A")
 
     st.write("")
     section("EXECUTIVE READOUT", "Signals worth noticing", "These are descriptive observations from the selected data; they do not establish causes or forecast future performance.")
@@ -510,14 +648,28 @@ if page == "Overview":
             line_data = pd.concat(chart_data, ignore_index=True)
             if len(known_flows) > 1:
                 line_data["Series"] = line_data["Period"] + " · " + line_data["Trade Flow"]
-                fig = px.line(line_data, x="Month", y="Value_USD_Bn", color="Series", markers=True,
-                              category_orders={"Month": month_labels}, color_discrete_sequence=PALETTE,
-                              labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
+                color_field = "Series"
+                chart_labels = {"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"}
+                chart_colors = PALETTE
             else:
-                fig = px.line(line_data, x="Month", y="Value_USD_Bn", color="Trade Flow", markers=True,
-                              category_orders={"Month": month_labels}, color_discrete_sequence=["#A3B3C2", TEAL],
-                              labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month", "Trade Flow": "Period"})
-            fig.update_traces(line_width=3, marker_size=7, hovertemplate="%{x}<br>US$%{y:,.2f}B<extra>%{fullData.name}</extra>")
+                color_field = "Trade Flow"
+                chart_labels = {"Value_USD_Bn": "Value (US$ billion)", "Month": "Month", "Trade Flow": "Period"}
+                chart_colors = ["#B7C1CA", TEAL]
+
+            if selected_trend_style == "Area":
+                fig = px.area(line_data, x="Month", y="Value_USD_Bn", color=color_field,
+                              category_orders={"Month": month_labels}, color_discrete_sequence=chart_colors,
+                              labels=chart_labels)
+            elif selected_trend_style == "Grouped bars":
+                fig = px.bar(line_data, x="Month", y="Value_USD_Bn", color=color_field, barmode="group",
+                             category_orders={"Month": month_labels}, color_discrete_sequence=chart_colors,
+                             labels=chart_labels)
+            else:
+                fig = px.line(line_data, x="Month", y="Value_USD_Bn", color=color_field, markers=True,
+                              category_orders={"Month": month_labels}, color_discrete_sequence=chart_colors,
+                              labels=chart_labels)
+                fig.update_traces(line_width=3, marker_size=7)
+            fig.update_traces(hovertemplate="%{x}<br>US$%{y:,.2f}B<extra>%{fullData.name}</extra>")
             fig.update_layout(hovermode="x unified", legend_title_text="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
             fig.update_yaxes(tickprefix="$", ticksuffix="B", title="Value (US$ billion)")
             render_chart(fig, "overview_monthly_trend", 380)
@@ -537,35 +689,78 @@ if page == "Overview":
 
     st.write("")
     section("02 / HISTORICAL CONTEXT", "How does the selected period compare with earlier years?", "A partial year is marked YTD and should not be read as a complete annual total.")
-    annual = base_filtered.groupby(["Year", "Trade Flow"], as_index=False)["Value_USD_Bn"].sum()
-    annual_months = base_filtered.groupby(["Year", "Trade Flow"])["MonthNum"].nunique().reset_index(name="Months")
+    annual_scope = base_filtered[base_filtered["MonthNum"].isin(months_present)].copy()
+    annual = annual_scope.groupby(["Year", "Trade Flow"], as_index=False)["Value_USD_Bn"].sum()
+    annual_months = annual_scope.groupby(["Year", "Trade Flow"])["MonthNum"].nunique().reset_index(name="Months")
     annual = annual.merge(annual_months, on=["Year", "Trade Flow"], how="left")
     annual["Period"] = annual.apply(lambda r: f"{int(r['Year'])} · YTD" if int(r["Months"]) < 12 else str(int(r["Year"])), axis=1)
     if len(known_flows) > 1:
         fig = px.bar(annual, x="Period", y="Value_USD_Bn", color="Trade Flow", barmode="group", color_discrete_sequence=PALETTE,
                      labels={"Value_USD_Bn": "Recorded value (US$ billion)", "Period": "Reporting period"})
     else:
-        annual_sum = base_filtered.groupby("Year", as_index=False)["Value_USD_Bn"].sum()
+        annual_sum = annual_scope.groupby("Year", as_index=False)["Value_USD_Bn"].sum()
         annual_sum["Period"] = annual_sum["Year"].astype(str)
-        annual_sum.loc[annual_sum["Year"] == latest_year, "Period"] = f"{latest_year} · YTD" if base_filtered.loc[base_filtered["Year"] == latest_year, "MonthNum"].nunique() < 12 else str(latest_year)
-        fig = px.bar(annual_sum, x="Period", y="Value_USD_Bn", color="Period", color_discrete_sequence=[TEAL, "#315B75", "#6DA9BC", "#D39B49", "#8A9BA8"],
+        annual_sum.loc[annual_sum["Year"] == selected_year, "Period"] = f"{selected_year} · selected" if len(months_present) < 12 else str(selected_year)
+        fig = px.bar(annual_sum, x="Period", y="Value_USD_Bn", color="Period", color_discrete_sequence=[TEAL, "#365B78", "#6E9F93", "#E0B15A", "#83919B"],
                      labels={"Value_USD_Bn": "Recorded value (US$ billion)", "Period": "Reporting period"})
     fig.update_traces(texttemplate="US$%{y:.1f}B", textposition="outside", cliponaxis=False, hovertemplate="%{x}<br>US$%{y:,.2f}B<extra></extra>")
     fig.update_layout(showlegend=len(known_flows) > 1, yaxis_title="Value (US$ billion)", xaxis_title="Reporting period")
     render_chart(fig, "overview_annual_context", 360, legend=len(known_flows) > 1)
 
     st.write("")
-    section("03 / LEADING MARKETS", "Which named markets have the largest recorded values?", "Aggregate labels are excluded from the ranking so they do not appear as real trading partners.")
-    top_markets = partner_totals.head(10).sort_values("Value_USD_Mn")
+    section("03 / LEADING MARKETS", "Which named markets have the largest recorded values?", "Aggregate labels are excluded from the ranking. Change the live scope above to recalculate these rankings.")
+    top_markets = partner_totals.head(top_partner_count).sort_values("Value_USD_Mn")
     if not top_markets.empty:
         top_markets["Value_USD_Bn"] = top_markets["Value_USD_Mn"] / 1000
         fig = px.bar(top_markets, x="Value_USD_Bn", y="DisplayCountry", orientation="h", text="Value_USD_Bn",
-                     color="Value_USD_Bn", color_continuous_scale=["#BFE5E5", TEAL, NAVY],
+                     color="Value_USD_Bn", color_continuous_scale=["#F8D6CA", TEAL, NAVY],
                      labels={"Value_USD_Bn": "Value (US$ billion)", "DisplayCountry": "Partner market"})
         fig.update_traces(texttemplate="US$%{x:.2f}B", textposition="outside", cliponaxis=False,
                           hovertemplate="%{y}<br>US$%{x:,.2f}B<extra></extra>")
         fig.update_layout(coloraxis_showscale=False, yaxis_title="", xaxis_title="Value (US$ billion)")
         render_chart(fig, "overview_top_markets", 400, legend=False)
+
+    st.write("")
+    section("SCENARIO LAB", "Test a what-if change for one commodity", "Adjust the growth assumption to see how a hypothetical change would affect the selected-period value. This is a sensitivity exercise, not a forecast.")
+    with st.container(border=True):
+        scenario_left, scenario_right = st.columns([1.0, 1.5], gap="large")
+        with scenario_left:
+            scenario_commodity = st.selectbox(
+                "Commodity to stress-test",
+                options=selected_commodities,
+                key="scenario_commodity_main",
+                format_func=lambda name: f"HS {int(data.loc[data['Commodity'] == name, 'HS Code'].iloc[0])} · {name}" if not data.loc[data["Commodity"] == name, "HS Code"].empty else name,
+            )
+            scenario_growth = st.slider(
+                "Assumed value change (%)",
+                min_value=-50,
+                max_value=100,
+                value=10,
+                step=5,
+                key="scenario_growth_main",
+                help="For example, +10% tests a scenario where the selected commodity's value is 10% higher than its recorded baseline.",
+            )
+        scenario_base = current.loc[current["Commodity"] == scenario_commodity, "Value_USD_Mn"].sum()
+        scenario_result = scenario_base * (1 + scenario_growth / 100)
+        scenario_delta = scenario_result - scenario_base
+        with scenario_right:
+            s1, s2, s3 = st.columns(3)
+            s1.metric("Recorded baseline", fmt_money_mn(scenario_base))
+            s2.metric("Scenario value", fmt_money_mn(scenario_result), delta=fmt_money_mn(scenario_delta))
+            s3.metric("Assumption", f"{scenario_growth:+d}%")
+            scenario_plot = pd.DataFrame({
+                "Scenario": ["Recorded baseline", f"What-if {scenario_growth:+d}%"],
+                "Value (US$ billion)": [scenario_base / 1000, scenario_result / 1000],
+            })
+            fig = px.bar(
+                scenario_plot, x="Scenario", y="Value (US$ billion)", color="Scenario",
+                color_discrete_sequence=["#B7C1CA", TEAL], text="Value (US$ billion)",
+                labels={"Value (US$ billion)": "Value (US$ billion)"},
+            )
+            fig.update_traces(texttemplate="US$%{y:.2f}B", textposition="outside", cliponaxis=False,
+                              hovertemplate="%{x}<br>US$%{y:,.2f}B<extra></extra>")
+            fig.update_layout(showlegend=False, yaxis_title="Value (US$ billion)", xaxis_title="", margin=dict(l=10, r=15, t=25, b=15))
+            render_chart(fig, "overview_scenario_lab", 300, legend=False)
 
 # =============================================================================
 # PAGE 2: COMMODITY BREAKDOWN
@@ -585,7 +780,7 @@ elif page == "Commodity breakdown":
                          labels={"Value_USD_Bn": "Value (US$ billion)", "Commodity": "Commodity group"}, hover_data=["Commodity Category"])
         else:
             commodity_bar = current.groupby(["Commodity", "Commodity Category"], as_index=False)["Value_USD_Bn"].sum().sort_values("Value_USD_Bn")
-            fig = px.bar(commodity_bar, x="Value_USD_Bn", y="Commodity", orientation="h", color="Value_USD_Bn", color_continuous_scale=["#BFE5E5", TEAL, NAVY],
+            fig = px.bar(commodity_bar, x="Value_USD_Bn", y="Commodity", orientation="h", color="Value_USD_Bn", color_continuous_scale=["#F8D6CA", TEAL, NAVY],
                          labels={"Value_USD_Bn": "Value (US$ billion)", "Commodity": "Commodity group"}, hover_data=["Commodity Category"])
         fig.update_layout(coloraxis_showscale=False, xaxis_title="Value (US$ billion)", yaxis_title="" if len(known_flows) == 1 else "Commodity group")
         render_chart(fig, "commodity_current_value", 420, legend=len(known_flows) > 1)
@@ -596,14 +791,14 @@ elif page == "Commodity breakdown":
             pivot["Balance (Exports − Imports)"] = pivot.get("Exports", 0) - pivot.get("Imports", 0)
             bal = pivot.reset_index().sort_values("Balance (Exports − Imports)")
             fig = px.bar(bal, x="Balance (Exports − Imports)", y="Commodity", orientation="h", color="Balance (Exports − Imports)",
-                         color_continuous_scale=[RED, "#E9EDF1", GREEN], labels={"Balance (Exports − Imports)": "Net balance (US$ billion)"})
+                         color_continuous_scale=[RED, "#E8E4DB", GREEN], labels={"Balance (Exports − Imports)": "Net balance (US$ billion)"})
             fig.add_vline(x=0, line_dash="dash", line_color="#748394")
             fig.update_layout(coloraxis_showscale=False, xaxis_title="Exports minus imports (US$ billion)", yaxis_title="")
             render_chart(fig, "commodity_balance", 420, legend=False)
         else:
             segment = current.groupby("Commodity Category", as_index=False)["Value_USD_Bn"].sum().sort_values("Value_USD_Bn", ascending=False)
             fig = px.treemap(segment, path=["Commodity Category"], values="Value_USD_Bn", color="Value_USD_Bn",
-                             color_continuous_scale=["#DDEFF0", "#6DA9BC", TEAL, NAVY], labels={"Value_USD_Bn": "Value (US$ billion)"})
+                             color_continuous_scale=["#DDEFF0", "#6E9F93", TEAL, NAVY], labels={"Value_USD_Bn": "Value (US$ billion)"})
             fig.update_traces(texttemplate="%{label}<br>US$%{value:.2f}B", hovertemplate="%{label}<br>US$%{value:,.2f}B<extra></extra>")
             fig.update_layout(coloraxis_showscale=False)
             render_chart(fig, "commodity_segment_treemap", 420, legend=False)
@@ -619,7 +814,7 @@ elif page == "Commodity breakdown":
             z=indexed.values,
             x=[pd.Timestamp(year=2000, month=int(m), day=1).strftime("%b") for m in indexed.columns],
             y=indexed.index.tolist(),
-            colorscale=[[0, "#F1F5F9"], [.65, "#A6DAD9"], [1, TEAL]],
+            colorscale=[[0, "#F1EDE5"], [.65, "#6E9F93"], [1, TEAL]],
             zmid=100,
             colorbar=dict(title="Index", thickness=13),
             hovertemplate="%{y}<br>%{x}<br>Index: %{z:.0f} (100 = category's own monthly average)<extra></extra>",
@@ -664,19 +859,19 @@ elif page == "Imports vs exports":
         import_share = imports_mn / (imports_mn + exports_mn) * 100 if (imports_mn + exports_mn) > 0 else np.nan
         a, b, c, d = st.columns(4, gap="medium")
         with a:
-            kpi_card("IMPORTS", fmt_money_mn(imports_mn), period_label, "#315B75")
+            kpi_card("IMPORTS", fmt_money_mn(imports_mn), period_label, "#365B78")
         with b:
             kpi_card("EXPORTS", fmt_money_mn(exports_mn), period_label, TEAL)
         with c:
             kpi_card("TRADE BALANCE", fmt_money_mn(balance_mn), "Exports − imports", GREEN if balance_mn >= 0 else RED)
         with d:
-            kpi_card("IMPORT SHARE", f"{import_share:.1f}%" if pd.notna(import_share) else "—", "Of combined import + export value", "#D39B49")
+            kpi_card("IMPORT SHARE", f"{import_share:.1f}%" if pd.notna(import_share) else "—", "Of combined import + export value", "#E0B15A")
 
         st.write("")
         flow_by_commodity = current[current["Trade Flow"].isin(["Imports", "Exports"])].groupby(["Commodity", "Trade Flow"], as_index=False)["Value_USD_Bn"].sum()
         left, right = st.columns([1.15, 1], gap="large")
         with left:
-            fig = px.bar(flow_by_commodity, x="Commodity", y="Value_USD_Bn", color="Trade Flow", barmode="group", color_discrete_map={"Imports": "#315B75", "Exports": TEAL},
+            fig = px.bar(flow_by_commodity, x="Commodity", y="Value_USD_Bn", color="Trade Flow", barmode="group", color_discrete_map={"Imports": "#365B78", "Exports": TEAL},
                          labels={"Value_USD_Bn": "Value (US$ billion)", "Commodity": "Commodity group"})
             fig.update_layout(xaxis_title="Commodity group", yaxis_title="Value (US$ billion)")
             render_chart(fig, "flow_import_export_commodity", 420)
@@ -684,9 +879,9 @@ elif page == "Imports vs exports":
             balances = flow_by_commodity.pivot(index="Commodity", columns="Trade Flow", values="Value_USD_Bn").fillna(0)
             balances["Balance"] = balances.get("Exports", 0) - balances.get("Imports", 0)
             balances = balances.reset_index().sort_values("Balance")
-            fig = px.bar(balances, x="Balance", y="Commodity", orientation="h", color="Balance", color_continuous_scale=[RED, "#F0F3F6", GREEN],
+            fig = px.bar(balances, x="Balance", y="Commodity", orientation="h", color="Balance", color_continuous_scale=[RED, "#ECE8E0", GREEN],
                          labels={"Balance": "Net balance (US$ billion)", "Commodity": "Commodity group"})
-            fig.add_vline(x=0, line_dash="dash", line_color="#667085")
+            fig.add_vline(x=0, line_dash="dash", line_color="#68727D")
             fig.update_layout(coloraxis_showscale=False, xaxis_title="Exports minus imports (US$ billion)", yaxis_title="")
             render_chart(fig, "flow_trade_balance", 420, legend=False)
 
@@ -694,7 +889,7 @@ elif page == "Imports vs exports":
         section("MONTHLY FLOW MOVEMENT", "Do imports and exports follow the same monthly pattern?", "Use the legend to focus on a flow. Hover over a point to inspect the month's value.")
         monthly_flow = current.groupby(["MonthNum", "Month", "Trade Flow"], as_index=False)["Value_USD_Bn"].sum()
         fig = px.line(monthly_flow, x="Month", y="Value_USD_Bn", color="Trade Flow", markers=True,
-                      category_orders={"Month": month_labels}, color_discrete_map={"Imports": "#315B75", "Exports": TEAL},
+                      category_orders={"Month": month_labels}, color_discrete_map={"Imports": "#365B78", "Exports": TEAL},
                       labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
         fig.update_traces(line_width=3, marker_size=8)
         fig.update_layout(hovermode="x unified", legend_title_text="")
@@ -742,10 +937,10 @@ elif page == "Partner markets":
         with mc2:
             kpi_card("YEAR-ON-YEAR", fmt_pct(market_yoy), f"Comparable months in {prior_year}", GREEN if pd.notna(market_yoy) and market_yoy >= 0 else RED)
         with mc3:
-            kpi_card("SHARE OF NAMED MARKETS", f"{market_share:.1f}%" if pd.notna(market_share) else "—", "Within current filters", "#315B75")
+            kpi_card("SHARE OF NAMED MARKETS", f"{market_share:.1f}%" if pd.notna(market_share) else "—", "Within current filters", "#365B78")
         with mc4:
             market_commodity = market_current.groupby("Commodity")["Value_USD_Mn"].sum().sort_values(ascending=False)
-            kpi_card("TOP COMMODITY", market_commodity.index[0] if not market_commodity.empty else "—", fmt_money_mn(market_commodity.iloc[0]) if not market_commodity.empty else "No value", "#D39B49")
+            kpi_card("TOP COMMODITY", market_commodity.index[0] if not market_commodity.empty else "—", fmt_money_mn(market_commodity.iloc[0]) if not market_commodity.empty else "No value", "#E0B15A")
 
         left, right = st.columns([1.15, 1], gap="large")
         with left:
@@ -758,7 +953,7 @@ elif page == "Partner markets":
             if market_monthly:
                 trend = pd.concat(market_monthly, ignore_index=True)
                 fig = px.line(trend, x="Month", y="Value_USD_Bn", color="Period", markers=True,
-                              category_orders={"Month": month_labels}, color_discrete_sequence=["#A3B3C2", TEAL],
+                              category_orders={"Month": month_labels}, color_discrete_sequence=["#B7C1CA", TEAL],
                               labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
                 fig.update_traces(line_width=3, marker_size=7)
                 fig.update_layout(hovermode="x unified", legend_title_text="")
@@ -775,7 +970,7 @@ elif page == "Partner markets":
         section("MARKET RANKING", "Compare the largest named partner markets", "The table and chart exclude aggregate or unspecified country labels.")
         top = partner_totals.head(15).sort_values("Value_USD_Mn")
         top["Value_USD_Bn"] = top["Value_USD_Mn"] / 1000
-        fig = px.bar(top, x="Value_USD_Bn", y="DisplayCountry", orientation="h", color="Value_USD_Bn", color_continuous_scale=["#BFE5E5", TEAL, NAVY],
+        fig = px.bar(top, x="Value_USD_Bn", y="DisplayCountry", orientation="h", color="Value_USD_Bn", color_continuous_scale=["#F8D6CA", TEAL, NAVY],
                      labels={"Value_USD_Bn": "Value (US$ billion)", "DisplayCountry": "Partner market"})
         fig.update_layout(coloraxis_showscale=False, yaxis_title="", xaxis_title="Value (US$ billion)")
         render_chart(fig, "partner_ranking", 470, legend=False)
@@ -814,10 +1009,10 @@ else:
     with a:
         kpi_card("ROWS IN CURRENT VIEW", f"{len(table):,}", "After year, commodity and search filters", TEAL)
     with b:
-        kpi_card("SOURCE YEARS", f"{min(years)}–{max(years)}", "Available reporting years", "#315B75")
+        kpi_card("SOURCE YEARS", f"{min(years)}–{max(years)}", "Available reporting years", "#365B78")
     with c:
         latest_date = data["Date"].max()
-        kpi_card("LATEST SOURCE MONTH", latest_date.strftime("%b %Y"), "Latest date present in loaded data", "#D39B49")
+        kpi_card("LATEST SOURCE MONTH", latest_date.strftime("%b %Y"), "Latest date present in loaded data", "#E0B15A")
 
     st.write("")
     with st.expander("Commodity taxonomy and scope", expanded=True):
@@ -861,6 +1056,6 @@ else:
 
 st.divider()
 st.markdown(
-    "<div class='panel-note'>PetroTrade Intelligence · DGCIS CSV supplied for this project. Commodity groups are derived from HS chapters. The app preserves the distinction between imported, exported, and unverified trade-flow data. Hover over charts for values; use each chart's modebar to zoom, pan, or download the image.</div>",
+    "<div class='panel-note'>PetroTrade Intelligence · DGCIS CSV supplied for this project. Commodity groups are derived from HS chapters. The app preserves the distinction between imported, exported, and unverified trade-flow data. Use the visible live controls to update the whole workspace. Hover over charts for values; use each chart's modebar to zoom, pan, or download the image.</div>",
     unsafe_allow_html=True,
 )
