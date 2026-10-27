@@ -1,17 +1,19 @@
 from pathlib import Path
+from io import BytesIO
 import html
 import re
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-# -----------------------------------------------------------------------------
-# PetroTrade Intelligence | Market intelligence dashboard
-# Data source: user-downloaded DGCIS CSV. Values in source are USD million.
-# The source file does not include an explicit import/export field.
-# -----------------------------------------------------------------------------
+# =============================================================================
+# PetroTrade Intelligence
+# Supports one source CSV with unknown direction, or separate import/export CSVs.
+# Source columns: HS Code, HS Description, Country Name, Month-Year_USD_Mn
+# =============================================================================
 st.set_page_config(
     page_title="PetroTrade Intelligence",
     page_icon="◈",
@@ -21,139 +23,127 @@ st.set_page_config(
 
 DATA_FILE = Path(__file__).parent / "DGCIS_DATA.csv"
 MONTH_RE = re.compile(r"^[A-Za-z]+-\d{4}_USD_Mn$")
-COMMODITIES = {
-    27: "Mineral fuels & oils",
-    28: "Inorganic chemicals",
-    29: "Organic chemicals",
-    39: "Plastics & articles",
-    40: "Rubber & articles",
-}
 MONTH_ORDER = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-PALETTE = ["#087E8B", "#315B75", "#6DA9BC", "#8A9BA8", "#D39B49", "#9B7EBD"]
+
+COMMODITY_INFO = {
+    27: {
+        "commodity": "Mineral fuels & oils",
+        "category": "Petroleum & energy feedstocks",
+        "description": "Mineral fuels, mineral oils and related distillation products. This is a broad HS chapter, not only petrochemicals.",
+    },
+    28: {
+        "commodity": "Inorganic chemicals",
+        "category": "Basic chemicals",
+        "description": "Inorganic chemical elements, compounds and related products.",
+    },
+    29: {
+        "commodity": "Organic chemicals",
+        "category": "Chemical intermediates",
+        "description": "Organic chemical compounds that may serve as industrial and chemical intermediates.",
+    },
+    39: {
+        "commodity": "Plastics & articles",
+        "category": "Polymers & plastics",
+        "description": "Plastics in primary forms and articles made from plastics.",
+    },
+    40: {
+        "commodity": "Rubber & articles",
+        "category": "Rubber & elastomers",
+        "description": "Rubber and articles of rubber, including a range of downstream products.",
+    },
+}
+
+COUNTRY_ALIASES = {
+    "U S A": "United States", "USA": "United States", "U ARAB EMTS": "United Arab Emirates",
+    "NETHERLAND": "Netherlands", "SAUDI ARAB": "Saudi Arabia", "SRI LANKA DSR": "Sri Lanka",
+    "YEMEN REPUBLC": "Yemen", "KYRGHYZSTAN": "Kyrgyzstan", "C AFRI REP": "Central African Republic",
+    "BOSNIA-HRZGOVIN": "Bosnia and Herzegovina", "MACEDONIA": "North Macedonia",
+    "CHINA P RP": "China", "TANZANIA REP": "Tanzania", "U S A": "United States",
+}
+EXCLUDED_MARKETS = {
+    "TOTAL", "ALL COUNTRIES", "WORLD TOTAL", "UNSPECIFIED", "NOT SPECIFIED", "OTHERS", "OTHER", ""
+}
+FLOW_NAMES = ["Imports", "Exports", "Direction not verified"]
+PALETTE = ["#087E8B", "#315B75", "#6DA9BC", "#D39B49", "#8A9BA8", "#8E79B7"]
 TEAL = "#087E8B"
 NAVY = "#142B3B"
 SLATE = "#667085"
 GREEN = "#16794B"
 RED = "#C2414B"
 
-COUNTRY_ALIASES = {
-    "U S A": "United States",
-    "USA": "United States",
-    "U ARAB EMTS": "United Arab Emirates",
-    "NETHERLAND": "Netherlands",
-    "SAUDI ARAB": "Saudi Arabia",
-    "SRI LANKA DSR": "Sri Lanka",
-    "YEMEN REPUBLC": "Yemen",
-    "KYRGHYZSTAN": "Kyrgyzstan",
-    "C AFRI REP": "Central African Republic",
-    "BOSNIA-HRZGOVIN": "Bosnia and Herzegovina",
-    "MACEDONIA": "North Macedonia",
-}
-EXCLUDED_MARKETS = {"TOTAL", "ALL COUNTRIES", "WORLD TOTAL", "UNSPECIFIED", "NOT SPECIFIED", "OTHERS", "OTHER", ""}
-
 st.markdown("""
 <style>
 :root { color-scheme: light; }
-.block-container { padding-top: 1.2rem; padding-bottom: 2.8rem; max-width: 1580px; }
-[data-testid="stSidebar"] { background: #F0F4F7; border-right: 1px solid #DCE4EB; }
-[data-testid="stSidebar"] > div { padding-top: 1.5rem; }
+.block-container { padding-top: 1.1rem; padding-bottom: 2.8rem; max-width: 1600px; }
+[data-testid="stSidebar"] { background: #F1F5F8; border-right: 1px solid #DCE4EB; }
+[data-testid="stSidebar"] > div { padding-top: 1.15rem; }
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #526579; }
+/* Hide Streamlit's toolbar in the local app; config.toml also sets minimal toolbar mode. */
+[data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
 .eyebrow { font-size: .70rem; letter-spacing: .17em; font-weight: 800; color: #0C8995; text-transform: uppercase; }
-.hero { background: linear-gradient(120deg, #102A3A 0%, #183C50 58%, #17616A 100%); color: white; padding: 1.65rem 1.85rem; border-radius: 18px; margin: .1rem 0 1.05rem 0; box-shadow: 0 10px 28px rgba(20,43,59,.10); }
+.hero { background: linear-gradient(120deg, #102A3A 0%, #183C50 58%, #17616A 100%); color: white; padding: 1.75rem 1.9rem; border-radius: 18px; margin: .1rem 0 1.0rem 0; box-shadow: 0 10px 28px rgba(20,43,59,.10); animation: fadeSlideIn .65s ease both; }
 .hero .hero-eyebrow { color: #7BD0D0; font-size: .70rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; margin-bottom: .55rem; }
-.hero .hero-title { font-size: 2.3rem; font-weight: 800; line-height: 1.08; letter-spacing: -.045em; margin: 0 0 .55rem; }
-.hero .hero-sub { max-width: 880px; color: #D4E2EA; font-size: .98rem; line-height: 1.55; }
+.hero .hero-title { font-size: 2.35rem; font-weight: 850; line-height: 1.08; letter-spacing: -.045em; margin: 0 0 .55rem; }
+.hero .hero-sub { max-width: 920px; color: #D4E2EA; font-size: .98rem; line-height: 1.6; }
 .hero-meta { display: flex; gap: .55rem; flex-wrap: wrap; margin-top: 1.1rem; }
 .hero-chip { display: inline-block; border: 1px solid rgba(255,255,255,.23); color: #E9F5F6; background: rgba(255,255,255,.08); padding: .35rem .65rem; border-radius: 999px; font-size: .73rem; }
-.section-kicker { font-size: .70rem; letter-spacing: .14em; text-transform: uppercase; font-weight: 800; color: #087E8B; margin: .15rem 0 .23rem; }
-.section-title { font-size: 1.35rem; letter-spacing: -.025em; font-weight: 770; color: #142B3B; margin: 0 0 .2rem; }
-.section-note { font-size: .87rem; line-height: 1.5; color: #667085; margin: 0 0 .85rem; }
-.kpi-card { background: #FFFFFF; border: 1px solid #DDE5EC; border-top: 3px solid #087E8B; border-radius: 14px; padding: 1.05rem 1.1rem .95rem; min-height: 126px; box-shadow: 0 3px 10px rgba(16,42,58,.035); }
-.kpi-label { color: #667085; font-size: .79rem; font-weight: 650; margin-bottom: .50rem; }
-.kpi-value { color: #142B3B; font-size: 1.78rem; line-height: 1.1; letter-spacing: -.035em; font-weight: 820; }
+/* Radio navigation is used as a compact top navigation bar. */
+div[data-testid="stRadio"] { margin: .2rem 0 .85rem; }
+div[data-testid="stRadio"] [role="radiogroup"] { display: flex; flex-direction: row; flex-wrap: wrap; gap: .45rem; padding: .35rem 0 .75rem; border-bottom: 1px solid #DDE5EC; }
+div[data-testid="stRadio"] [role="radiogroup"] label { background: #FFFFFF; border: 1px solid #DDE5EC; border-radius: 10px; padding: .5rem .85rem; margin: 0; color: #526579; font-weight: 680; transition: transform .2s ease, border-color .2s ease, background .2s ease; }
+div[data-testid="stRadio"] [role="radiogroup"] label:hover { transform: translateY(-2px); border-color: #087E8B; }
+div[data-testid="stRadio"] input[type="radio"] { accent-color: #087E8B; }
+div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) { background: #E5F4F4; border-color: #087E8B; color: #087E8B; }
+.section-kicker { font-size: .70rem; letter-spacing: .14em; text-transform: uppercase; font-weight: 800; color: #087E8B; margin: .25rem 0 .23rem; }
+.section-title { font-size: 1.35rem; letter-spacing: -.025em; font-weight: 790; color: #142B3B; margin: 0 0 .2rem; }
+.section-note { font-size: .87rem; line-height: 1.55; color: #667085; margin: 0 0 .85rem; }
+.kpi-card { background: #FFFFFF; border: 1px solid #DDE5EC; border-top: 3px solid #087E8B; border-radius: 14px; padding: 1.05rem 1.1rem .95rem; min-height: 126px; box-shadow: 0 3px 10px rgba(16,42,58,.035); animation: fadeSlideIn .55s ease both; transition: transform .22s ease, box-shadow .22s ease; }
+.kpi-card:hover { transform: translateY(-4px); box-shadow: 0 12px 25px rgba(16,42,58,.10); }
+.kpi-label { color: #667085; font-size: .77rem; font-weight: 720; margin-bottom: .50rem; letter-spacing: .025em; }
+.kpi-value { color: #142B3B; font-size: 1.78rem; line-height: 1.1; letter-spacing: -.035em; font-weight: 840; }
 .kpi-foot { color: #748394; font-size: .76rem; margin-top: .55rem; line-height: 1.35; }
-.insight-card { display: flex; gap: .75rem; align-items: flex-start; background: white; border: 1px solid #DFE6EC; border-radius: 12px; padding: .9rem .95rem; min-height: 116px; }
-.insight-mark { flex-shrink: 0; width: 30px; height: 30px; display:flex; align-items:center; justify-content:center; background:#E5F4F4; color:#087E8B; border-radius:9px; font-size:.96rem; font-weight:800; }
-.insight-label { color: #667085; text-transform: uppercase; letter-spacing: .105em; font-size: .66rem; font-weight: 800; margin-bottom: .32rem; }
-.insight-text { color: #263D4E; font-size: .88rem; line-height: 1.5; }
-.callout { background: #FFF8E8; border: 1px solid #F0D89E; color: #6E531F; border-radius: 10px; padding: .7rem .9rem; font-size: .82rem; line-height: 1.45; margin: .4rem 0 .8rem; }
+.insight-grid-card { background: white; border: 1px solid #DFE6EC; border-radius: 12px; padding: .95rem; min-height: 116px; box-shadow: 0 2px 8px rgba(16,42,58,.025); animation: fadeSlideIn .6s ease both; transition: transform .2s ease, box-shadow .2s ease; }
+.insight-grid-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(16,42,58,.07); }
+.insight-mark { display: inline-flex; align-items:center; justify-content:center; width: 30px; height: 30px; background:#E5F4F4; color:#087E8B; border-radius:9px; font-size:.9rem; font-weight:850; margin-bottom:.6rem; }
+.insight-label { color: #667085; text-transform: uppercase; letter-spacing: .105em; font-size: .66rem; font-weight: 850; margin-bottom: .32rem; }
+.insight-text { color: #263D4E; font-size: .88rem; line-height: 1.52; }
+.callout { background: #FFF8E8; border: 1px solid #F0D89E; color: #6E531F; border-radius: 10px; padding: .7rem .9rem; font-size: .82rem; line-height: 1.5; margin: .4rem 0 .8rem; }
+.info-panel { background: #F3F8FA; border: 1px solid #D8E7ED; border-radius: 13px; padding: 1rem 1.1rem; margin: .4rem 0 .9rem; color: #365164; line-height: 1.55; }
+.info-panel b { color: #142B3B; }
 .panel-note { color: #7A8794; font-size: .75rem; line-height: 1.45; }
-div[data-testid="stPlotlyChart"] { background: #FFFFFF; border: 1px solid #DDE5EC; border-radius: 14px; padding: .38rem .45rem .1rem; box-shadow: 0 3px 10px rgba(16,42,58,.025); }
+/* Charts animate into view and gently lift on hover. Plotly itself supplies hover/zoom/legend interactions. */
+div[data-testid="stPlotlyChart"] { background: #FFFFFF; border: 1px solid #DDE5EC; border-radius: 14px; padding: .35rem .4rem .08rem; box-shadow: 0 3px 10px rgba(16,42,58,.025); animation: chartEnter .72s cubic-bezier(.2,.75,.3,1) both; transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease; }
+div[data-testid="stPlotlyChart"]:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(16,42,58,.085); border-color: #B8D6DD; }
 div[data-testid="stDataFrame"] { border: 1px solid #DDE5EC; border-radius: 10px; overflow: hidden; }
-/* Streamlit toolbar fallback */
-[data-testid="stToolbar"],
-[data-testid="stDecoration"] {
-    display: none !important;
-}
-
-/* Top navigation */
-div[data-testid="stRadio"] {
-    margin-bottom: 1rem;
-}
-
-div[data-testid="stRadio"] [role="radiogroup"] {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    padding: 0.5rem 0 0.8rem;
-    border-bottom: 1px solid #DDE5EC;
-}
-
-div[data-testid="stRadio"] [role="radiogroup"] label {
-    background: #FFFFFF;
-    border: 1px solid #DDE5EC;
-    border-radius: 10px;
-    padding: 0.55rem 0.9rem;
-    margin: 0;
-    color: #526579;
-    font-weight: 650;
-}
-
-div[data-testid="stRadio"] input[type="radio"] {
-    accent-color: #087E8B;
-}
-
-div[data-testid="stRadio"] [role="radiogroup"]
-label:has(input:checked) {
-    background: #E5F4F4;
-    border-color: #087E8B;
-    color: #087E8B;
-}
-
-/* Chart cards */
-div[data-testid="stPlotlyChart"] {
-    overflow: hidden;
-    border: 1px solid #DDE5EC;
-    border-radius: 14px;
-    background: #FFFFFF;
-    padding: 0.3rem;
-    box-shadow: 0 3px 10px rgba(16, 42, 58, 0.025);
-}
 hr { border-color: #DDE5EC; }
+@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes chartEnter { from { opacity: .25; transform: translateY(12px) scale(.992); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 @media (max-width: 900px) { .hero .hero-title { font-size: 1.8rem; } .kpi-value { font-size: 1.45rem; } }
 </style>
 """, unsafe_allow_html=True)
 
 
-@st.cache_data(show_spinner="Preparing DGCIS trade records…")
-def load_data(path: str) -> pd.DataFrame:
-    raw = pd.read_csv(path, low_memory=False)
+@st.cache_data(show_spinner=False)
+def parse_trade_csv(file_bytes: bytes, flow_label: str) -> pd.DataFrame:
+    """Parse a DGCIS-style wide monthly CSV to a long monthly table."""
+    raw = pd.read_csv(BytesIO(file_bytes), low_memory=False)
     raw.columns = raw.columns.astype(str).str.strip()
     required = ["HS Code", "HS Description", "Country Name"]
-    missing = [c for c in required if c not in raw.columns]
+    missing = [col for col in required if col not in raw.columns]
     if missing:
         raise ValueError("Missing required columns: " + ", ".join(missing))
 
-    month_cols = [c for c in raw.columns if MONTH_RE.match(c)]
+    month_cols = [col for col in raw.columns if MONTH_RE.match(col)]
     if not month_cols:
-        raise ValueError("No monthly USD_Mn columns found. Expected names like January-2025_USD_Mn.")
+        raise ValueError("No monthly USD_Mn columns found. Expected columns like January-2025_USD_Mn.")
 
     raw["HS Code"] = pd.to_numeric(raw["HS Code"], errors="coerce")
     raw["Country Name"] = raw["Country Name"].fillna("").astype(str).str.strip()
     raw["HS Description"] = raw["HS Description"].fillna("").astype(str).str.strip()
-    # Drop the source's overall TOTAL row (it has no HS code) to prevent double counting.
-    raw = raw.dropna(subset=["HS Code"])
+    raw = raw.dropna(subset=["HS Code"]).copy()
 
     long_df = raw.melt(
         id_vars=required,
@@ -176,15 +166,25 @@ def load_data(path: str) -> pd.DataFrame:
     long_df["MonthNum"] = long_df["Date"].dt.month.astype(int)
     long_df["Month"] = long_df["Date"].dt.strftime("%b")
     long_df["Value_USD_Bn"] = long_df["Value_USD_Mn"] / 1000
-    long_df["Commodity"] = long_df["HS Code"].map(COMMODITIES).fillna(long_df["HS Description"])
+    long_df["Trade Flow"] = flow_label
+
+    def commodity_name(code, description):
+        return COMMODITY_INFO.get(code, {}).get("commodity", description.rstrip(" ."))
+
+    def category_name(code, description):
+        return COMMODITY_INFO.get(code, {}).get("category", "Other / unclassified HS chapter")
+
+    long_df["Commodity"] = [commodity_name(code, desc) for code, desc in zip(long_df["HS Code"], long_df["HS Description"])]
+    long_df["Commodity Category"] = [category_name(code, desc) for code, desc in zip(long_df["HS Code"], long_df["HS Description"])]
     long_df["CountryKey"] = long_df["Country Name"].str.upper().str.strip()
     long_df["DisplayCountry"] = long_df["CountryKey"].map(COUNTRY_ALIASES).fillna(long_df["Country Name"])
-    long_df = long_df[~long_df["CountryKey"].isin({"TOTAL", "ALL COUNTRIES", "WORLD TOTAL"})]
+    # The TOTAL row is an aggregate and should never be summed with country rows.
+    long_df = long_df[~long_df["CountryKey"].isin({"TOTAL", "ALL COUNTRIES", "WORLD TOTAL"})].copy()
     return long_df.sort_values("Date").reset_index(drop=True)
 
 
-def money(value, decimals=1):
-    if pd.isna(value):
+def fmt_money_mn(value, decimals=1):
+    if value is None or pd.isna(value):
         return "—"
     value = float(value)
     if abs(value) >= 1000:
@@ -192,664 +192,675 @@ def money(value, decimals=1):
     return f"US${value:,.{decimals}f}M"
 
 
-def money_bn(value, decimals=1):
-    if pd.isna(value):
+def fmt_money_bn(value, decimals=2):
+    if value is None or pd.isna(value):
         return "—"
     return f"US${float(value):,.{decimals}f}B"
 
 
-def pct(value, decimals=1):
-    return "—" if pd.isna(value) else f"{float(value):+,.{decimals}f}%"
+def fmt_pct(value, decimals=1):
+    return "—" if value is None or pd.isna(value) else f"{float(value):+,.{decimals}f}%"
 
 
-def safe_html(value):
+def safe(value):
     return html.escape(str(value))
 
 
 def section(kicker, title, note=""):
-    st.markdown(f"<div class='section-kicker'>{safe_html(kicker)}</div><div class='section-title'>{safe_html(title)}</div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='section-kicker'>{safe(kicker)}</div><div class='section-title'>{safe(title)}</div>",
+        unsafe_allow_html=True,
+    )
     if note:
-        st.markdown(f"<div class='section-note'>{safe_html(note)}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='section-note'>{safe(note)}</div>", unsafe_allow_html=True)
 
 
 def kpi_card(label, value, foot, accent=TEAL):
     st.markdown(
         f"<div class='kpi-card' style='border-top-color:{accent}'>"
-        f"<div class='kpi-label'>{safe_html(label)}</div>"
-        f"<div class='kpi-value'>{safe_html(value)}</div>"
-        f"<div class='kpi-foot'>{safe_html(foot)}</div></div>",
+        f"<div class='kpi-label'>{safe(label)}</div>"
+        f"<div class='kpi-value'>{safe(value)}</div>"
+        f"<div class='kpi-foot'>{safe(foot)}</div></div>",
         unsafe_allow_html=True,
     )
 
 
 def insight_card(mark, label, text):
     st.markdown(
-        f"<div class='insight-card'><div class='insight-mark'>{safe_html(mark)}</div>"
-        f"<div><div class='insight-label'>{safe_html(label)}</div>"
-        f"<div class='insight-text'>{safe_html(text)}</div></div></div>",
+        f"<div class='insight-grid-card'><div class='insight-mark'>{safe(mark)}</div>"
+        f"<div class='insight-label'>{safe(label)}</div><div class='insight-text'>{safe(text)}</div></div>",
         unsafe_allow_html=True,
     )
 
 
-def style_fig(fig, height=370, showlegend=None, horizontal=False):
+def style_fig(fig, height=360, legend=True):
     fig.update_layout(
         template="plotly_white",
         height=height,
-        margin=dict(l=18, r=145 if any(getattr(trace, "type", "") == "pie" for trace in fig.data) else 26, t=30, b=22),
+        margin=dict(l=18, r=28, t=40, b=24),
         paper_bgcolor="rgba(255,255,255,0)",
         plot_bgcolor="rgba(255,255,255,0)",
         font=dict(family="Inter, Segoe UI, Arial, sans-serif", color="#526579", size=12),
         hoverlabel=dict(bgcolor="#142B3B", font_color="#FFFFFF", bordercolor="#142B3B"),
         legend=dict(font=dict(color="#526579", size=11), bgcolor="rgba(255,255,255,0)"),
+        showlegend=legend,
+        transition=dict(duration=450, easing="cubic-in-out"),
     )
-    if showlegend is not None:
-        fig.update_layout(showlegend=showlegend)
-    if horizontal:
-        fig.update_xaxes(showgrid=True, gridcolor="#EDF1F5", zeroline=False, linecolor="#D6DEE6", tickfont=dict(color="#667085"))
-        fig.update_yaxes(showgrid=False, zeroline=False, linecolor="#D6DEE6", tickfont=dict(color="#667085"))
-    else:
-        fig.update_xaxes(showgrid=False, linecolor="#D6DEE6", tickfont=dict(color="#667085"))
-        fig.update_yaxes(showgrid=True, gridcolor="#EDF1F5", zeroline=False, tickfont=dict(color="#667085"))
+    fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#D6DEE6", ticks="outside")
+    fig.update_yaxes(showgrid=True, gridcolor="#EDF1F5", zeroline=False, linecolor="#D6DEE6", ticks="outside")
     return fig
 
 
-def clean_chart_axis(fig, x_title=None, y_title=None):
-    if x_title is not None:
-        fig.update_xaxes(title=x_title)
-    if y_title is not None:
-        fig.update_yaxes(title=y_title)
-    return fig
+def render_chart(fig, key, height=360, legend=True):
+    st.plotly_chart(
+        style_fig(fig, height=height, legend=legend),
+        use_container_width=True,
+        key=key,
+        config={
+            "displayModeBar": "hover",
+            "responsive": True,
+            "scrollZoom": True,
+            "displaylogo": False,
+        },
+    )
 
 
 def named_rows(frame):
-    return frame[~frame["CountryKey"].isin(EXCLUDED_MARKETS) & (frame["Value_USD_Mn"] > 0)].copy()
+    if frame.empty:
+        return frame.copy()
+    return frame[~frame["CountryKey"].isin(EXCLUDED_MARKETS)].copy()
 
 
-def compact_table_height(n_rows, min_height=120, max_height=420):
-    return min(max_height, max(min_height, 43 + n_rows * 36))
+def compact_height(rows, min_height=120, max_height=440):
+    return min(max_height, max(min_height, 42 + rows * 35))
 
 
-# Load and validate source
+def select_months_for_flows(df, selected_year):
+    """Use months common to every loaded flow for fair side-by-side comparisons."""
+    year_data = df[df["Year"] == selected_year]
+    flow_month_sets = []
+    for flow_name in sorted(year_data["Trade Flow"].dropna().unique()):
+        months = set(year_data.loc[year_data["Trade Flow"] == flow_name, "MonthNum"].unique().tolist())
+        if months:
+            flow_month_sets.append(months)
+    if not flow_month_sets:
+        return []
+    common = set.intersection(*flow_month_sets)
+    if common:
+        return sorted(common)
+    # Defensive fallback for files whose coverage doesn't overlap at all.
+    return sorted(set.union(*flow_month_sets))
+
+
+def build_commodity_ledger(current_data, prior_data, commodity_names, available_flows):
+    rows = []
+    has_imports = "Imports" in available_flows
+    has_exports = "Exports" in available_flows
+    for commodity in commodity_names:
+        cur = current_data[current_data["Commodity"] == commodity]
+        prev = prior_data[prior_data["Commodity"] == commodity]
+        recorded = cur["Value_USD_Mn"].sum()
+        prior_recorded = prev["Value_USD_Mn"].sum()
+        import_value = cur.loc[cur["Trade Flow"] == "Imports", "Value_USD_Mn"].sum() if has_imports else np.nan
+        export_value = cur.loc[cur["Trade Flow"] == "Exports", "Value_USD_Mn"].sum() if has_exports else np.nan
+        prior_import = prev.loc[prev["Trade Flow"] == "Imports", "Value_USD_Mn"].sum() if has_imports else np.nan
+        prior_export = prev.loc[prev["Trade Flow"] == "Exports", "Value_USD_Mn"].sum() if has_exports else np.nan
+        balance = export_value - import_value if has_imports and has_exports else np.nan
+        rows.append({
+            "Commodity": commodity,
+            "Commodity category": cur["Commodity Category"].iloc[0] if not cur.empty else "—",
+            "Recorded value (US$ B)": recorded / 1000,
+            "Imports (US$ B)": import_value / 1000 if has_imports else np.nan,
+            "Exports (US$ B)": export_value / 1000 if has_exports else np.nan,
+            "Export − import (US$ B)": balance / 1000 if has_imports and has_exports else np.nan,
+            "YoY recorded change (%)": (recorded / prior_recorded - 1) * 100 if prior_recorded > 0 else np.nan,
+            "Import YoY (%)": (import_value / prior_import - 1) * 100 if has_imports and prior_import > 0 else np.nan,
+            "Export YoY (%)": (export_value / prior_export - 1) * 100 if has_exports and prior_export > 0 else np.nan,
+        })
+    return pd.DataFrame(rows)
+
+
+# =============================================================================
+# Sidebar: data direction and file loading
+# =============================================================================
 if not DATA_FILE.exists():
-    st.error("DGCIS_DATA.csv was not found. Keep the downloaded CSV in the same folder as app.py.")
+    st.error("DGCIS_DATA.csv was not found. Place it in the same folder as app.py.")
     st.stop()
+
+st.sidebar.markdown("<div class='eyebrow'>WORKSPACE</div>", unsafe_allow_html=True)
+st.sidebar.title("PetroTrade controls")
+st.sidebar.caption("Choose your time window, commodity groups, and data flows. Charts and tables update automatically.")
+
+base_flow = st.sidebar.selectbox(
+    "DGCIS_DATA.csv represents",
+    ["Direction not verified", "Imports", "Exports"],
+    index=0,
+    help="Only select Imports or Exports after confirming the DGCIS query settings used to download this CSV.",
+)
+st.sidebar.markdown("**Optional: add separate trade-flow files**")
+imports_upload = st.sidebar.file_uploader("Import dataset CSV", type=["csv"], key="imports_csv")
+exports_upload = st.sidebar.file_uploader("Export dataset CSV", type=["csv"], key="exports_csv")
+st.sidebar.caption("For a real import/export comparison, supply one Imports CSV and one Exports CSV with matching HS chapters and periods.")
+
 try:
-    data = load_data(str(DATA_FILE))
+    base_bytes = DATA_FILE.read_bytes()
+    frames = []
+    # Explicit flow uploads take precedence over the base file for that flow.
+    if imports_upload is not None:
+        frames.append(parse_trade_csv(imports_upload.getvalue(), "Imports"))
+    elif base_flow == "Imports":
+        frames.append(parse_trade_csv(base_bytes, "Imports"))
+
+    if exports_upload is not None:
+        frames.append(parse_trade_csv(exports_upload.getvalue(), "Exports"))
+    elif base_flow == "Exports":
+        frames.append(parse_trade_csv(base_bytes, "Exports"))
+
+    if not frames:
+        frames.append(parse_trade_csv(base_bytes, "Direction not verified"))
+
+    data = pd.concat(frames, ignore_index=True).sort_values("Date").reset_index(drop=True)
 except Exception as exc:
-    st.error(f"Could not load the dataset: {exc}")
+    st.error(f"Unable to read one of the DGCIS files: {exc}")
+    st.info("Check that each file has HS Code, HS Description, Country Name, and monthly *_USD_Mn columns.")
     st.stop()
+
 if data.empty:
-    st.error("No valid trade records were found in this CSV.")
+    st.error("No valid trade records were found in the selected CSV files.")
     st.stop()
 
-# Sidebar controls
-years = sorted(data["Year"].dropna().unique().tolist())
+years = sorted(data["Year"].unique().tolist())
 latest_year = max(years)
-latest_months = sorted(data.loc[data["Year"] == latest_year, "MonthNum"].unique().tolist())
-latest_partial = len(latest_months) < 12
-st.sidebar.markdown("---")
 
-st.sidebar.markdown("**Data source**")
-
-st.sidebar.caption(
-    "DGCIS monthly trade records · USD million"
-)
-
-st.sidebar.caption(
-    "HS chapters 27, 28, 29, 39 and 40"
-)
-
-st.sidebar.caption(
-    "Verify import/export direction in the source query."
-)
 
 def year_label(y):
-    n = data.loc[data["Year"] == y, "MonthNum"].nunique()
-    return f"{y} · YTD ({n} months)" if n < 12 else str(y)
+    months = sorted(data.loc[data["Year"] == y, "MonthNum"].unique().tolist())
+    return f"{y} · YTD ({len(months)} months)" if len(months) < 12 else str(y)
 
-year = st.sidebar.selectbox("Analysis year", years, index=years.index(latest_year), format_func=year_label)
-commodity_options = [COMMODITIES[k] for k in [27, 28, 29, 39, 40] if COMMODITIES[k] in set(data["Commodity"].dropna())]
+selected_year = st.sidebar.selectbox("Analysis year", years, index=years.index(latest_year), format_func=year_label)
+commodity_options = sorted(data["Commodity"].dropna().unique().tolist(), key=lambda c: next((k for k, v in COMMODITY_INFO.items() if v["commodity"] == c), 999))
 selected_commodities = st.sidebar.multiselect("Commodity groups", commodity_options, default=commodity_options)
 if not selected_commodities:
     st.warning("Select at least one commodity group in the sidebar to continue.")
     st.stop()
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("**Current scope**")
-st.sidebar.caption("Trade value in US dollars. The downloaded file does not encode import/export direction, so confirm the query settings in DGCIS before presenting the figures as imports or exports.")
+available_flows = sorted(data["Trade Flow"].dropna().unique().tolist())
+months_present = select_months_for_flows(data, selected_year)
+if not months_present:
+    st.error("No months are available for the selected year.")
+    st.stop()
 
-# Base filters and comparable period
-filtered = data[data["Commodity"].isin(selected_commodities)].copy()
-current = filtered[filtered["Year"] == year].copy()
-months_present = sorted(current["MonthNum"].unique().tolist())
-period_month_order = [pd.Timestamp(year=2000, month=int(m), day=1).strftime("%b") for m in months_present]
-prior_year = year - 1
-prior = filtered[(filtered["Year"] == prior_year) & filtered["MonthNum"].isin(months_present)].copy()
+# Apply the same months to all flows for fair import/export and YoY comparisons.
+base_filtered = data[data["Commodity"].isin(selected_commodities)].copy()
+current = base_filtered[(base_filtered["Year"] == selected_year) & base_filtered["MonthNum"].isin(months_present)].copy()
+prior_year = selected_year - 1
+prior = base_filtered[(base_filtered["Year"] == prior_year) & base_filtered["MonthNum"].isin(months_present)].copy()
 partial = len(months_present) < 12
-if months_present:
-    start_month = pd.Timestamp(year=2000, month=min(months_present), day=1).strftime("%b")
-    end_month = pd.Timestamp(year=2000, month=max(months_present), day=1).strftime("%b")
-    period_label = f"{start_month}–{end_month} {year}" if len(months_present) < 12 else f"Jan–Dec {year}"
-else:
-    period_label = str(year)
+period_start = pd.Timestamp(year=2000, month=min(months_present), day=1).strftime("%b")
+period_end = pd.Timestamp(year=2000, month=max(months_present), day=1).strftime("%b")
+period_label = f"{period_start}–{period_end} {selected_year}" if partial else f"Jan–Dec {selected_year}"
+month_labels = [pd.Timestamp(year=2000, month=m, day=1).strftime("%b") for m in months_present]
 
 current_total_mn = current["Value_USD_Mn"].sum()
 prior_total_mn = prior["Value_USD_Mn"].sum()
-yoy_total = (current_total_mn / prior_total_mn - 1) * 100 if prior_total_mn > 0 else float("nan")
-commodity_totals = (current.groupby("Commodity", as_index=False)["Value_USD_Mn"].sum()
-                    .sort_values("Value_USD_Mn", ascending=False))
-if not commodity_totals.empty and current_total_mn > 0:
-    leader = commodity_totals.iloc[0]
-    leader_share = leader["Value_USD_Mn"] / current_total_mn * 100
-else:
-    leader = None
-    leader_share = 0
+yoy_total = (current_total_mn / prior_total_mn - 1) * 100 if prior_total_mn > 0 else np.nan
+commodity_totals = current.groupby(["Commodity", "Commodity Category"], as_index=False)["Value_USD_Mn"].sum().sort_values("Value_USD_Mn", ascending=False)
+leader = commodity_totals.iloc[0] if not commodity_totals.empty else None
+leader_share = leader["Value_USD_Mn"] / current_total_mn * 100 if leader is not None and current_total_mn > 0 else np.nan
 named_current = named_rows(current)
 named_prior = named_rows(prior)
-partner_totals = (named_current.groupby(["Country Name", "DisplayCountry"], as_index=False)["Value_USD_Mn"].sum()
-                  .sort_values("Value_USD_Mn", ascending=False))
-partner_total = partner_totals["Value_USD_Mn"].sum()
-active_markets = int(partner_totals["Country Name"].nunique())
+partner_totals = named_current.groupby(["Country Name", "DisplayCountry"], as_index=False)["Value_USD_Mn"].sum().sort_values("Value_USD_Mn", ascending=False)
+partner_sum = partner_totals["Value_USD_Mn"].sum() if not partner_totals.empty else 0
+active_markets = int(partner_totals["Country Name"].nunique()) if not partner_totals.empty else 0
 top_partner = partner_totals.iloc[0] if not partner_totals.empty else None
-top5_share = partner_totals.head(5)["Value_USD_Mn"].sum() / partner_total * 100 if partner_total > 0 else float("nan")
-monthly_current = (current.groupby(["MonthNum", "Month"], as_index=False)["Value_USD_Mn"].sum().sort_values("MonthNum"))
-monthly_prior = (prior.groupby(["MonthNum", "Month"], as_index=False)["Value_USD_Mn"].sum().sort_values("MonthNum"))
+top5_share = partner_totals.head(5)["Value_USD_Mn"].sum() / partner_sum * 100 if partner_sum > 0 else np.nan
+monthly_current = current.groupby(["MonthNum", "Month"], as_index=False)["Value_USD_Mn"].sum().sort_values("MonthNum")
 peak = monthly_current.loc[monthly_current["Value_USD_Mn"].idxmax()] if not monthly_current.empty else None
+known_flows = set(data["Trade Flow"].unique())
+has_imports = "Imports" in known_flows
+has_exports = "Exports" in known_flows
+has_both_flows = has_imports and has_exports
 
-# Hero header
+# =============================================================================
+# Global hero and top navigation
+# =============================================================================
 st.markdown(
-    f"<div class='hero'><div class='hero-eyebrow'>India trade intelligence / {safe_html(year_label(year))}</div>"
+    f"<div class='hero'><div class='hero-eyebrow'>INDIA TRADE INTELLIGENCE · {safe(year_label(selected_year))}</div>"
     f"<div class='hero-title'>PetroTrade Intelligence</div>"
-    f"<div class='hero-sub'>From trade records to market signals. Track commodity performance, measure year-on-year movement, and identify which partner markets account for the most recorded value.</div>"
-    f"<div class='hero-meta'><span class='hero-chip'>DGCIS source extract</span><span class='hero-chip'>{safe_html(period_label)}</span>"
-    f"<span class='hero-chip'>{len(selected_commodities)} commodity groups</span><span class='hero-chip'>USD value · Millions converted to billions for charts</span></div></div>",
+    f"<div class='hero-sub'>A market intelligence workspace for petroleum-related and downstream material trade. Explore commodity categories, compare yearly import/export values when both flows are supplied, and uncover which partner markets account for recorded value.</div>"
+    f"<div class='hero-meta'><span class='hero-chip'>DGCIS source extract</span><span class='hero-chip'>{safe(period_label)}</span>"
+    f"<span class='hero-chip'>{len(selected_commodities)} commodity groups selected</span><span class='hero-chip'>{len(known_flows)} data flow(s) loaded</span></div></div>",
     unsafe_allow_html=True,
 )
 
-# KPI strip
-k1, k2, k3, k4 = st.columns(4, gap="medium")
-with k1:
-    kpi_card("RECORDED TRADE VALUE", money(current_total_mn), f"{period_label} · selected commodity groups", TEAL)
-with k2:
-    yoy_value = pct(yoy_total) if not pd.isna(yoy_total) else "No baseline"
-    delta_caption = f"vs. same {len(months_present)} month(s) in {prior_year}" if prior_total_mn > 0 else "Comparable prior-year data unavailable"
-    kpi_card("YEAR-ON-YEAR CHANGE", yoy_value, delta_caption, GREEN if (not pd.isna(yoy_total) and yoy_total >= 0) else RED)
-with k3:
-    leader_label = f"{leader_share:.1f}%" if leader is not None else "—"
-    leader_foot = f"{leader['Commodity']} · {money(leader['Value_USD_Mn'])}" if leader is not None else "No commodity values available"
-    kpi_card("LEADING COMMODITY SHARE", leader_label, leader_foot, "#315B75")
-with k4:
-    kpi_card("NAMED PARTNER MARKETS", f"{active_markets:,}", "Positive-value named partners in selected period", "#D39B49")
-
-if partial:
-    st.markdown(f"<div class='callout'><b>Period note:</b> {safe_html(year)} currently contains {len(months_present)} months in this dataset. Year-on-year change compares only {len(months_present)} comparable month(s) from {prior_year}, rather than comparing a partial year with a full year.</div>", unsafe_allow_html=True)
-
-# Executive readout
-st.write("")
-section("Executive readout", "Signals worth noticing", "These observations describe patterns in the selected data; they do not establish the causes behind those patterns.")
-i1, i2, i3 = st.columns(3, gap="medium")
-with i1:
-    if leader is not None:
-        insight_card("01", "Commodity mix", f"{leader['Commodity']} is the largest selected group at {leader_share:.1f}% of recorded value ({money(leader['Value_USD_Mn'])}).")
-    else:
-        insight_card("01", "Commodity mix", "No commodity leader can be calculated for the current selection.")
-with i2:
-    if top_partner is not None:
-        insight_card("02", "Largest named partner", f"{top_partner['DisplayCountry']} leads named markets at {money(top_partner['Value_USD_Mn'])}. The top five markets account for {top5_share:.1f}% of named-partner value.")
-    else:
-        insight_card("02", "Partner markets", "No named partner markets are available for this selection.")
-with i3:
-    if peak is not None:
-        insight_card("03", "Monthly high", f"{peak['Month']} is the strongest month in {year} at {money(peak['Value_USD_Mn'])}. This is a descriptive peak, not a forecast.")
-    else:
-        insight_card("03", "Monthly high", "No monthly peak is available for the current selection.")
-
-st.write("")
-# Main navigation: each tab has a distinct analytical job.
-# Main navigation
-selected_page = st.radio(
+pages = ["Overview", "Commodity breakdown", "Imports vs exports", "Partner markets", "Data & methodology"]
+page = st.radio(
     "Main navigation",
-    [
-        "Market overview",
-        "Commodity intelligence",
-        "Partner explorer",
-        "Data & methodology",
-    ],
+    pages,
     horizontal=True,
     label_visibility="collapsed",
     key="main_navigation",
 )
 
-# -----------------------------------------------------------------------------
-# Overview tab
-# -----------------------------------------------------------------------------
-if selected_page == "Market overview":
+if not has_both_flows:
+    st.markdown(
+        "<div class='callout'><b>Data-flow note:</b> This workspace currently has "
+        + safe(", ".join(available_flows))
+        + ". Import/export comparisons and trade balance are only calculated after both flow-specific datasets are loaded. The app does not guess direction from values.</div>",
+        unsafe_allow_html=True,
+    )
+if partial:
+    st.markdown(
+        f"<div class='callout'><b>Comparable-period rule:</b> {selected_year} contains {len(months_present)} comparable months in the selected flow data. Year-on-year figures use the same months of {prior_year}.</div>",
+        unsafe_allow_html=True,
+    )
+
+# =============================================================================
+# PAGE 1: OVERVIEW
+# =============================================================================
+if page == "Overview":
+    section("WELCOME / START HERE", "From raw trade records to market signals", "Use this page for a quick executive view. Move to the other pages for commodity-level breakdowns, import/export comparison, partner-market exploration, and downloadable records.")
+    st.markdown(
+        "<div class='info-panel'><b>How to use PetroTrade:</b><br>"
+        "<b>1. Choose the year and commodity groups</b> from the left panel. All metrics and charts respond to these filters.<br>"
+        "<b>2. Read the signals</b> to see the largest commodity group, the leading named partner, and the strongest month in the selected period.<br>"
+        "<b>3. Explore a question</b> using Commodity breakdown, Imports vs exports, or Partner markets in the top navigation.<br>"
+        "<b>4. Export evidence</b> from Data & methodology for further analysis. Values are in US dollars; chart scales use billions for readability.</div>",
+        unsafe_allow_html=True,
+    )
+
+    combined_label = "Combined value in loaded flow data" if len(known_flows) > 1 else "Recorded value"
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+    with c1:
+        kpi_card(combined_label.upper(), fmt_money_mn(current_total_mn), f"{period_label} · selected groups", TEAL)
+    with c2:
+        kpi_card("YEAR-ON-YEAR CHANGE", fmt_pct(yoy_total), f"vs. comparable months in {prior_year}", GREEN if pd.notna(yoy_total) and yoy_total >= 0 else RED)
+    with c3:
+        kpi_card("LEADING COMMODITY SHARE", f"{leader_share:.1f}%" if pd.notna(leader_share) else "—", f"{leader['Commodity']} · {fmt_money_mn(leader['Value_USD_Mn'])}" if leader is not None else "No value available", "#315B75")
+    with c4:
+        kpi_card("NAMED PARTNER MARKETS", f"{active_markets:,}", "Positive-value named markets", "#D39B49")
+
     st.write("")
-    section("01 / Time series", "Is recorded value moving up or down?", "Compare each month with the same month in the prior year. This makes partial-year comparisons more meaningful.")
-    trend_left, trend_right = st.columns([1.45, 1], gap="large")
-    with trend_left:
-        frames = []
-        if not monthly_prior.empty:
-            p = monthly_prior.copy()
-            p["Period"] = f"{prior_year} · comparable"
-            p["Value_USD_Bn"] = p["Value_USD_Mn"] / 1000
-            frames.append(p)
-        if not monthly_current.empty:
-            c = monthly_current.copy()
-            c["Period"] = f"{year}{' · YTD' if partial else ''}"
-            c["Value_USD_Bn"] = c["Value_USD_Mn"] / 1000
-            frames.append(c)
-        if frames:
-            trend = pd.concat(frames, ignore_index=True)
-            color_map = {f"{prior_year} · comparable": "#A3B3C2", f"{year}{' · YTD' if partial else ''}": TEAL}
-            fig = px.line(
-                trend, x="Month", y="Value_USD_Bn", color="Period", markers=True,
-                category_orders={"Month": period_month_order}, color_discrete_map=color_map,
-                labels={"Month": "Month", "Value_USD_Bn": "Recorded value (US$ billion)"},
-            )
+    section("EXECUTIVE READOUT", "Signals worth noticing", "These are descriptive observations from the selected data; they do not establish causes or forecast future performance.")
+    i1, i2, i3 = st.columns(3, gap="medium")
+    with i1:
+        insight_card("01", "Commodity mix", f"{leader['Commodity']} represents {leader_share:.1f}% of the selected-period value ({fmt_money_mn(leader['Value_USD_Mn'])})." if leader is not None and pd.notna(leader_share) else "No commodity leader is available for this selection.")
+    with i2:
+        insight_card("02", "Largest named partner", f"{top_partner['DisplayCountry']} is the largest named market at {fmt_money_mn(top_partner['Value_USD_Mn'])}. The top five markets represent {top5_share:.1f}% of named-market value." if top_partner is not None else "No named markets are available for this selection.")
+    with i3:
+        insight_card("03", "Monthly high", f"{peak['Month']} is the strongest month in {selected_year} at {fmt_money_mn(peak['Value_USD_Mn'])}. This is a descriptive peak, not a forecast." if peak is not None else "No monthly peak is available.")
+
+    st.write("")
+    section("01 / TIME SERIES", "Is recorded value moving up or down?", "Monthly values compare the selected year with the same months in the preceding year.")
+    left, right = st.columns([1.35, 1], gap="large")
+    with left:
+        chart_data = []
+        for period_df, period_name in [(prior, f"{prior_year} · comparable"), (current, f"{selected_year}{' · YTD' if partial else ''}")]:
+            if period_df.empty:
+                continue
+            if len(known_flows) > 1:
+                monthly_flow = period_df.groupby(["MonthNum", "Month", "Trade Flow"], as_index=False)["Value_USD_Bn"].sum()
+                monthly_flow["Period"] = period_name
+                chart_data.append(monthly_flow)
+            else:
+                monthly_flow = period_df.groupby(["MonthNum", "Month"], as_index=False)["Value_USD_Bn"].sum()
+                monthly_flow["Trade Flow"] = period_name
+                chart_data.append(monthly_flow)
+        if chart_data:
+            line_data = pd.concat(chart_data, ignore_index=True)
+            if len(known_flows) > 1:
+                line_data["Series"] = line_data["Period"] + " · " + line_data["Trade Flow"]
+                fig = px.line(line_data, x="Month", y="Value_USD_Bn", color="Series", markers=True,
+                              category_orders={"Month": month_labels}, color_discrete_sequence=PALETTE,
+                              labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
+            else:
+                fig = px.line(line_data, x="Month", y="Value_USD_Bn", color="Trade Flow", markers=True,
+                              category_orders={"Month": month_labels}, color_discrete_sequence=["#A3B3C2", TEAL],
+                              labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month", "Trade Flow": "Period"})
             fig.update_traces(line_width=3, marker_size=7, hovertemplate="%{x}<br>US$%{y:,.2f}B<extra>%{fullData.name}</extra>")
             fig.update_layout(hovermode="x unified", legend_title_text="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
             fig.update_yaxes(tickprefix="$", ticksuffix="B", title="Value (US$ billion)")
-            st.plotly_chart(style_fig(fig, 390), use_container_width=True, config={"displayModeBar": False})
+            render_chart(fig, "overview_monthly_trend", 380)
         else:
-            st.info("No monthly values available for this selection.")
-    with trend_right:
+            st.info("No monthly values are available for this period.")
+    with right:
         if not commodity_totals.empty:
             mix = commodity_totals.copy()
             mix["Value_USD_Bn"] = mix["Value_USD_Mn"] / 1000
-            fig = px.pie(
-                mix, names="Commodity", values="Value_USD_Bn", hole=.66,
-                color_discrete_sequence=PALETTE,
-                labels={"Commodity": "Commodity group", "Value_USD_Bn": "Value (US$ billion)"},
-            )
-            fig.update_traces(
-                textposition="inside", textinfo="percent", textfont=dict(size=12, color="white"),
-                hovertemplate="%{label}<br>US$%{value:,.2f}B<br>%{percent}<extra></extra>",
-                marker=dict(line=dict(color="#FFFFFF", width=2)),
-            )
-            fig.add_annotation(x=.5, y=.5, text=f"<b>{money_bn(current_total_mn / 1000)}</b><br><span style='font-size:11px'>total value</span>",
-                               showarrow=False, font=dict(size=16, color=NAVY))
-            fig.update_layout(legend=dict(orientation="v", x=1.02, y=.5, yanchor="middle"), margin=dict(l=8, r=120, t=20, b=12))
-            st.plotly_chart(style_fig(fig, 390), use_container_width=True, config={"displayModeBar": False})
-        else:
-            st.info("No commodity values available.")
+            fig = px.pie(mix, names="Commodity", values="Value_USD_Bn", hole=.68, color="Commodity", color_discrete_sequence=PALETTE)
+            fig.update_traces(textposition="inside", textinfo="percent", marker=dict(line=dict(color="white", width=2)),
+                              hovertemplate="%{label}<br>US$%{value:,.2f}B<br>%{percent}<extra></extra>")
+            fig.add_annotation(text=f"{fmt_money_mn(current_total_mn)}<br><sup>recorded value</sup>", x=.5, y=.5, showarrow=False,
+                               font=dict(size=16, color=NAVY), align="center")
+            fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=-.15, xanchor="center", x=.5))
+            render_chart(fig, "overview_commodity_mix", 380)
 
     st.write("")
-    section("02 / Historical context", "How does this period compare with the wider series?", "Annual totals are shown for context. The latest partial year is explicitly marked YTD.")
-    annual = (filtered.groupby("Year", as_index=False)["Value_USD_Mn"].sum().sort_values("Year"))
-    annual_month_count = filtered.groupby("Year")["MonthNum"].nunique().to_dict()
-    annual["Period"] = annual["Year"].apply(lambda y: f"{y} · YTD" if annual_month_count.get(y, 0) < 12 else str(y))
-    annual["Value_USD_Bn"] = annual["Value_USD_Mn"] / 1000
-    annual["Label"] = annual["Value_USD_Bn"].map(lambda v: f"${v:,.1f}B")
-    fig = px.bar(annual, x="Period", y="Value_USD_Bn", text="Label",
-                 labels={"Period": "Reporting period", "Value_USD_Bn": "Recorded value (US$ billion)"})
-    fig.update_traces(marker_color=["#AAB7C4" if "YTD" in p else TEAL for p in annual["Period"]],
-                      textposition="outside", cliponaxis=False, hovertemplate="%{x}<br>US$%{y:,.2f}B<extra></extra>")
-    fig.update_layout(showlegend=False, yaxis_title="Value (US$ billion)")
-    fig.update_yaxes(range=[0, float(annual["Value_USD_Bn"].max()) * 1.18])
-    st.plotly_chart(style_fig(fig, 330), use_container_width=True, config={"displayModeBar": False})
-
-    st.write("")
-    section("03 / Leading markets", "Which named markets have the largest recorded values?", "Aggregate labels are excluded from the ranking. Select a market in the Partner explorer tab for a country-level drill-down.")
-    if partner_totals.empty:
-        st.info("No named partner markets available.")
+    section("02 / HISTORICAL CONTEXT", "How does the selected period compare with earlier years?", "A partial year is marked YTD and should not be read as a complete annual total.")
+    annual = base_filtered.groupby(["Year", "Trade Flow"], as_index=False)["Value_USD_Bn"].sum()
+    annual_months = base_filtered.groupby(["Year", "Trade Flow"])["MonthNum"].nunique().reset_index(name="Months")
+    annual = annual.merge(annual_months, on=["Year", "Trade Flow"], how="left")
+    annual["Period"] = annual.apply(lambda r: f"{int(r['Year'])} · YTD" if int(r["Months"]) < 12 else str(int(r["Year"])), axis=1)
+    if len(known_flows) > 1:
+        fig = px.bar(annual, x="Period", y="Value_USD_Bn", color="Trade Flow", barmode="group", color_discrete_sequence=PALETTE,
+                     labels={"Value_USD_Bn": "Recorded value (US$ billion)", "Period": "Reporting period"})
     else:
-        top = partner_totals.head(10).sort_values("Value_USD_Mn", ascending=True).copy()
-        top["Value_USD_Bn"] = top["Value_USD_Mn"] / 1000
-        fig = px.bar(top, x="Value_USD_Bn", y="DisplayCountry", orientation="h", text="Value_USD_Bn",
-                     labels={"Value_USD_Bn": "Recorded value (US$ billion)", "DisplayCountry": "Partner market"})
-        fig.update_traces(marker_color="#315B75", texttemplate="$%{x:,.2f}B", textposition="outside", cliponaxis=False,
+        annual_sum = base_filtered.groupby("Year", as_index=False)["Value_USD_Bn"].sum()
+        annual_sum["Period"] = annual_sum["Year"].astype(str)
+        annual_sum.loc[annual_sum["Year"] == latest_year, "Period"] = f"{latest_year} · YTD" if base_filtered.loc[base_filtered["Year"] == latest_year, "MonthNum"].nunique() < 12 else str(latest_year)
+        fig = px.bar(annual_sum, x="Period", y="Value_USD_Bn", color="Period", color_discrete_sequence=[TEAL, "#315B75", "#6DA9BC", "#D39B49", "#8A9BA8"],
+                     labels={"Value_USD_Bn": "Recorded value (US$ billion)", "Period": "Reporting period"})
+    fig.update_traces(texttemplate="US$%{y:.1f}B", textposition="outside", cliponaxis=False, hovertemplate="%{x}<br>US$%{y:,.2f}B<extra></extra>")
+    fig.update_layout(showlegend=len(known_flows) > 1, yaxis_title="Value (US$ billion)", xaxis_title="Reporting period")
+    render_chart(fig, "overview_annual_context", 360, legend=len(known_flows) > 1)
+
+    st.write("")
+    section("03 / LEADING MARKETS", "Which named markets have the largest recorded values?", "Aggregate labels are excluded from the ranking so they do not appear as real trading partners.")
+    top_markets = partner_totals.head(10).sort_values("Value_USD_Mn")
+    if not top_markets.empty:
+        top_markets["Value_USD_Bn"] = top_markets["Value_USD_Mn"] / 1000
+        fig = px.bar(top_markets, x="Value_USD_Bn", y="DisplayCountry", orientation="h", text="Value_USD_Bn",
+                     color="Value_USD_Bn", color_continuous_scale=["#BFE5E5", TEAL, NAVY],
+                     labels={"Value_USD_Bn": "Value (US$ billion)", "DisplayCountry": "Partner market"})
+        fig.update_traces(texttemplate="US$%{x:.2f}B", textposition="outside", cliponaxis=False,
                           hovertemplate="%{y}<br>US$%{x:,.2f}B<extra></extra>")
-        fig.update_layout(showlegend=False, xaxis_title="Value (US$ billion)", yaxis_title="")
-        fig.update_xaxes(range=[0, float(top["Value_USD_Bn"].max()) * 1.22])
-        st.plotly_chart(style_fig(fig, 400, horizontal=True), use_container_width=True, config={"displayModeBar": False})
-        st.write("")
+        fig.update_layout(coloraxis_showscale=False, yaxis_title="", xaxis_title="Value (US$ billion)")
+        render_chart(fig, "overview_top_markets", 400, legend=False)
 
-    section(
-        "04 / Partner momentum",
-        "Which major markets are growing or declining?",
-        "Bubble size represents current-period value. Colour represents "
-        "year-on-year growth against comparable months."
+# =============================================================================
+# PAGE 2: COMMODITY BREAKDOWN
+# =============================================================================
+elif page == "Commodity breakdown":
+    section("COMMODITY INTELLIGENCE", "Categorise every selected commodity group", "Each row combines the HS chapter, a readable commodity group, a higher-level segment, and recorded value for the selected year.")
+    st.markdown(
+        "<div class='info-panel'><b>What this page tells you:</b> compare the scale of each category, see which groups are strengthening or weakening year over year, and inspect the month-by-month pattern. These are broad HS chapter groups. The source does not provide product-level detail within a chapter.</div>",
+        unsafe_allow_html=True,
     )
 
-    partner_now = (
-        named_current.groupby(
-            ["Country Name", "DisplayCountry"],
-            as_index=False
-        )["Value_USD_Mn"]
-        .sum()
-        .rename(columns={"Value_USD_Mn": "Current_Mn"})
-    )
-
-    partner_prev = (
-        named_prior.groupby(
-            "Country Name",
-            as_index=False
-        )["Value_USD_Mn"]
-        .sum()
-        .rename(columns={"Value_USD_Mn": "Prior_Mn"})
-    )
-
-    momentum = partner_now.merge(
-        partner_prev,
-        on="Country Name",
-        how="left",
-    )
-
-    momentum["Prior_Mn"] = momentum["Prior_Mn"].fillna(0)
-
-    # Growth needs a positive, comparable prior-year baseline.
-    momentum = momentum[momentum["Prior_Mn"] > 0].copy()
-
-    if not momentum.empty:
-        momentum["YoY change (%)"] = (
-            momentum["Current_Mn"] / momentum["Prior_Mn"] - 1
-        ) * 100
-
-        momentum["Current_USD_Bn"] = momentum["Current_Mn"] / 1000
-
-        # Focus the view on the 25 largest current-period markets.
-        momentum = momentum.nlargest(25, "Current_Mn")
-
-        fig = px.scatter(
-            momentum,
-            x="Current_USD_Bn",
-            y="YoY change (%)",
-            size="Current_USD_Bn",
-            color="YoY change (%)",
-            hover_name="DisplayCountry",
-            size_max=38,
-            color_continuous_scale=[
-                "#C2414B",
-                "#E8EDF2",
-                "#087E8B",
-            ],
-            labels={
-                "Current_USD_Bn": "Recorded value (US$ billion)",
-                "YoY change (%)": "YoY change (%)",
-            },
-            hover_data={
-                "Current_USD_Bn": ":.2f",
-                "YoY change (%)": ":.1f",
-                "Prior_Mn": False,
-            },
-        )
-
-        fig.add_hline(
-            y=0,
-            line_dash="dash",
-            line_color="#98A6B5",
-        )
-
-        fig.update_layout(
-            coloraxis_colorbar_title="YoY %",
-            xaxis_title="Current-period value (US$ billion)",
-            yaxis_title="YoY change (%)",
-        )
-
-        st.plotly_chart(
-            style_fig(fig, 420),
-            use_container_width=True,
-            config={"displayModeBar": False, "responsive": True},
-        )
-
-    else:
-        st.info(
-            "Comparable positive prior-year values are unavailable "
-            "for the selected filters."
-        )
-# -----------------------------------------------------------------------------
-# Commodity intelligence tab
-# -----------------------------------------------------------------------------
-if selected_page == "Commodity intelligence":
-    st.write("")
-    section("04 / Commodity performance", "Which commodity groups are gaining or losing ground?", "Year-on-year values compare the selected year with the same months in the previous year. Percentages are not calculated where no positive baseline exists.")
-
-    change_rows = []
-    for commodity in selected_commodities:
-        cur_val = current.loc[current["Commodity"] == commodity, "Value_USD_Mn"].sum()
-        prev_val = prior.loc[prior["Commodity"] == commodity, "Value_USD_Mn"].sum()
-        change_val = cur_val - prev_val
-        change_pct = (cur_val / prev_val - 1) * 100 if prev_val > 0 else float("nan")
-        change_rows.append({
-            "Commodity": commodity,
-            "Selected value (US$ B)": cur_val / 1000,
-            "Comparable prior (US$ B)": prev_val / 1000,
-            "Change (US$ B)": change_val / 1000,
-            "YoY change (%)": change_pct,
-        })
-    changes = pd.DataFrame(change_rows)
-    change_left, change_right = st.columns([1.1, 1], gap="large")
-    with change_left:
-        plot_changes = changes.dropna(subset=["YoY change (%)"]).sort_values("YoY change (%)", ascending=True)
-        if not plot_changes.empty:
-            fig = go.Figure(go.Bar(
-                x=plot_changes["YoY change (%)"], y=plot_changes["Commodity"], orientation="h",
-                marker_color=[GREEN if x >= 0 else RED for x in plot_changes["YoY change (%)"]],
-                text=[f"{x:+.1f}%" for x in plot_changes["YoY change (%)"]], textposition="outside",
-                hovertemplate="%{y}<br>YoY change: %{x:+.1f}%<extra></extra>",
-            ))
-            fig.add_vline(x=0, line_width=1, line_color="#98A6B5")
-            fig.update_layout(showlegend=False, xaxis_title="Year-on-year change (%)", yaxis_title="")
-            xmin = min(0.0, float(plot_changes["YoY change (%)"].min()))
-            xmax = max(0.0, float(plot_changes["YoY change (%)"].max()))
-            span = max(10.0, xmax - xmin)
-            fig.update_xaxes(range=[xmin - span * 0.12, xmax + span * 0.25])
-            st.plotly_chart(style_fig(fig, 340, horizontal=True), use_container_width=True, config={"displayModeBar": False})
+    left, right = st.columns([1.15, 1], gap="large")
+    with left:
+        commodity_bar = current.groupby(["Commodity", "Commodity Category", "Trade Flow"], as_index=False)["Value_USD_Bn"].sum()
+        if len(known_flows) > 1:
+            fig = px.bar(commodity_bar, x="Commodity", y="Value_USD_Bn", color="Trade Flow", barmode="group", color_discrete_sequence=PALETTE,
+                         labels={"Value_USD_Bn": "Value (US$ billion)", "Commodity": "Commodity group"}, hover_data=["Commodity Category"])
         else:
-            st.info("A positive prior-year baseline is unavailable for this year.")
-    with change_right:
-        shown = changes.copy()
-        shown["Selected value (US$ B)"] = shown["Selected value (US$ B)"].map(lambda x: f"${x:,.2f}B")
-        shown["Comparable prior (US$ B)"] = shown["Comparable prior (US$ B)"].map(lambda x: f"${x:,.2f}B")
-        shown["Change (US$ B)"] = shown["Change (US$ B)"].map(lambda x: f"{'+' if x >= 0 else '−'}${abs(x):,.2f}B")
-        shown["YoY change (%)"] = shown["YoY change (%)"].map(pct)
-        st.dataframe(shown, use_container_width=True, hide_index=True, height=compact_table_height(len(shown), max_height=330))
+            commodity_bar = current.groupby(["Commodity", "Commodity Category"], as_index=False)["Value_USD_Bn"].sum().sort_values("Value_USD_Bn")
+            fig = px.bar(commodity_bar, x="Value_USD_Bn", y="Commodity", orientation="h", color="Value_USD_Bn", color_continuous_scale=["#BFE5E5", TEAL, NAVY],
+                         labels={"Value_USD_Bn": "Value (US$ billion)", "Commodity": "Commodity group"}, hover_data=["Commodity Category"])
+        fig.update_layout(coloraxis_showscale=False, xaxis_title="Value (US$ billion)", yaxis_title="" if len(known_flows) == 1 else "Commodity group")
+        render_chart(fig, "commodity_current_value", 420, legend=len(known_flows) > 1)
+    with right:
+        if has_both_flows:
+            both = current[current["Trade Flow"].isin(["Imports", "Exports"])].groupby(["Commodity", "Trade Flow"], as_index=False)["Value_USD_Bn"].sum()
+            pivot = both.pivot(index="Commodity", columns="Trade Flow", values="Value_USD_Bn").fillna(0)
+            pivot["Balance (Exports − Imports)"] = pivot.get("Exports", 0) - pivot.get("Imports", 0)
+            bal = pivot.reset_index().sort_values("Balance (Exports − Imports)")
+            fig = px.bar(bal, x="Balance (Exports − Imports)", y="Commodity", orientation="h", color="Balance (Exports − Imports)",
+                         color_continuous_scale=[RED, "#E9EDF1", GREEN], labels={"Balance (Exports − Imports)": "Net balance (US$ billion)"})
+            fig.add_vline(x=0, line_dash="dash", line_color="#748394")
+            fig.update_layout(coloraxis_showscale=False, xaxis_title="Exports minus imports (US$ billion)", yaxis_title="")
+            render_chart(fig, "commodity_balance", 420, legend=False)
+        else:
+            segment = current.groupby("Commodity Category", as_index=False)["Value_USD_Bn"].sum().sort_values("Value_USD_Bn", ascending=False)
+            fig = px.treemap(segment, path=["Commodity Category"], values="Value_USD_Bn", color="Value_USD_Bn",
+                             color_continuous_scale=["#DDEFF0", "#6DA9BC", TEAL, NAVY], labels={"Value_USD_Bn": "Value (US$ billion)"})
+            fig.update_traces(texttemplate="%{label}<br>US$%{value:.2f}B", hovertemplate="%{label}<br>US$%{value:,.2f}B<extra></extra>")
+            fig.update_layout(coloraxis_showscale=False)
+            render_chart(fig, "commodity_segment_treemap", 420, legend=False)
 
     st.write("")
-    section("05 / Monthly pattern", "When is each commodity group relatively stronger?", "Heatmap values are indexed to each commodity's own average month in the selected year (= 100). This reveals relative monthly pattern without letting the largest commodity dominate the colour scale.")
+    section("MONTHLY PATTERN", "When does each commodity group run above its own average?", "Each row is indexed to that commodity's own monthly average in the selected year (=100), so the largest group does not dominate the colour scale.")
     heat = current.groupby(["Commodity", "MonthNum", "Month"], as_index=False)["Value_USD_Mn"].sum()
     if not heat.empty:
         pivot = heat.pivot(index="Commodity", columns="MonthNum", values="Value_USD_Mn").reindex(selected_commodities)
         pivot = pivot.reindex(columns=months_present)
-        indexed = pivot.div(pivot.mean(axis=1).replace(0, pd.NA), axis=0) * 100
-        labels = [pd.Timestamp(year=2000, month=int(m), day=1).strftime("%b") for m in indexed.columns]
+        indexed = pivot.div(pivot.mean(axis=1).replace(0, np.nan), axis=0) * 100
         fig = go.Figure(data=go.Heatmap(
-            z=indexed.values, x=labels, y=indexed.index.tolist(),
-            colorscale=[[0, "#F1F5F9"], [.65, "#A6DAD9"], [1, "#087E8B"]],
-            zmid=100, colorbar=dict(title="Index", ticksuffix="", thickness=14),
-            hovertemplate="%{y}<br>%{x}<br>Index: %{z:.0f}<extra></extra>",
+            z=indexed.values,
+            x=[pd.Timestamp(year=2000, month=int(m), day=1).strftime("%b") for m in indexed.columns],
+            y=indexed.index.tolist(),
+            colorscale=[[0, "#F1F5F9"], [.65, "#A6DAD9"], [1, TEAL]],
+            zmid=100,
+            colorbar=dict(title="Index", thickness=13),
+            hovertemplate="%{y}<br>%{x}<br>Index: %{z:.0f} (100 = category's own monthly average)<extra></extra>",
         ))
         fig.update_layout(xaxis_title="Month", yaxis_title="Commodity group")
-        st.plotly_chart(style_fig(fig, 300), use_container_width=True, config={"displayModeBar": False})
+        render_chart(fig, "commodity_monthly_heatmap", 330, legend=False)
+
+    st.write("")
+    section("COMMODITY LEDGER", "Annual imports, exports and trade balance by category", "Import/export columns are populated only for the flow-specific datasets you have loaded. Missing flows remain blank rather than being treated as zero.")
+    ledger = build_commodity_ledger(current, prior, selected_commodities, known_flows)
+    display_ledger = ledger.copy()
+    for col in ["Recorded value (US$ B)", "Imports (US$ B)", "Exports (US$ B)", "Export − import (US$ B)"]:
+        if col in display_ledger.columns:
+            display_ledger[col] = display_ledger[col].map(lambda x: f"{x:,.2f}" if pd.notna(x) else "—")
+    for col in ["YoY recorded change (%)", "Import YoY (%)", "Export YoY (%)"]:
+        if col in display_ledger.columns:
+            display_ledger[col] = display_ledger[col].map(fmt_pct)
+    st.dataframe(display_ledger, use_container_width=True, hide_index=True, height=compact_height(len(display_ledger), max_height=360))
+    st.download_button("Download commodity ledger", ledger.to_csv(index=False).encode("utf-8"), file_name=f"petrotrade_commodity_ledger_{selected_year}.csv", mime="text/csv")
+
+    with st.expander("Commodity categories explained"):
+        explanations = []
+        for code, info in COMMODITY_INFO.items():
+            if info["commodity"] in selected_commodities:
+                explanations.append({"HS chapter": code, "Commodity group": info["commodity"], "Analytical category": info["category"], "Scope note": info["description"]})
+        st.dataframe(pd.DataFrame(explanations), use_container_width=True, hide_index=True)
+
+# =============================================================================
+# PAGE 3: IMPORTS VS EXPORTS
+# =============================================================================
+elif page == "Imports vs exports":
+    section("TRADE-FLOW COMPARISON", "See imports, exports and net trade position", "This page requires flow-specific datasets. The app does not infer import/export direction from the value columns.")
+    st.markdown(
+        "<div class='info-panel'><b>Definitions:</b> Imports are goods brought into the country; exports are goods sent out of the country. For this dashboard, <b>trade balance = exports − imports</b>. A positive balance means exports exceed imports for the selected commodity group and period; a negative balance means imports exceed exports.</div>",
+        unsafe_allow_html=True,
+    )
+
+    if has_both_flows:
+        imports_mn = current.loc[current["Trade Flow"] == "Imports", "Value_USD_Mn"].sum()
+        exports_mn = current.loc[current["Trade Flow"] == "Exports", "Value_USD_Mn"].sum()
+        balance_mn = exports_mn - imports_mn
+        import_share = imports_mn / (imports_mn + exports_mn) * 100 if (imports_mn + exports_mn) > 0 else np.nan
+        a, b, c, d = st.columns(4, gap="medium")
+        with a:
+            kpi_card("IMPORTS", fmt_money_mn(imports_mn), period_label, "#315B75")
+        with b:
+            kpi_card("EXPORTS", fmt_money_mn(exports_mn), period_label, TEAL)
+        with c:
+            kpi_card("TRADE BALANCE", fmt_money_mn(balance_mn), "Exports − imports", GREEN if balance_mn >= 0 else RED)
+        with d:
+            kpi_card("IMPORT SHARE", f"{import_share:.1f}%" if pd.notna(import_share) else "—", "Of combined import + export value", "#D39B49")
+
+        st.write("")
+        flow_by_commodity = current[current["Trade Flow"].isin(["Imports", "Exports"])].groupby(["Commodity", "Trade Flow"], as_index=False)["Value_USD_Bn"].sum()
+        left, right = st.columns([1.15, 1], gap="large")
+        with left:
+            fig = px.bar(flow_by_commodity, x="Commodity", y="Value_USD_Bn", color="Trade Flow", barmode="group", color_discrete_map={"Imports": "#315B75", "Exports": TEAL},
+                         labels={"Value_USD_Bn": "Value (US$ billion)", "Commodity": "Commodity group"})
+            fig.update_layout(xaxis_title="Commodity group", yaxis_title="Value (US$ billion)")
+            render_chart(fig, "flow_import_export_commodity", 420)
+        with right:
+            balances = flow_by_commodity.pivot(index="Commodity", columns="Trade Flow", values="Value_USD_Bn").fillna(0)
+            balances["Balance"] = balances.get("Exports", 0) - balances.get("Imports", 0)
+            balances = balances.reset_index().sort_values("Balance")
+            fig = px.bar(balances, x="Balance", y="Commodity", orientation="h", color="Balance", color_continuous_scale=[RED, "#F0F3F6", GREEN],
+                         labels={"Balance": "Net balance (US$ billion)", "Commodity": "Commodity group"})
+            fig.add_vline(x=0, line_dash="dash", line_color="#667085")
+            fig.update_layout(coloraxis_showscale=False, xaxis_title="Exports minus imports (US$ billion)", yaxis_title="")
+            render_chart(fig, "flow_trade_balance", 420, legend=False)
+
+        st.write("")
+        section("MONTHLY FLOW MOVEMENT", "Do imports and exports follow the same monthly pattern?", "Use the legend to focus on a flow. Hover over a point to inspect the month's value.")
+        monthly_flow = current.groupby(["MonthNum", "Month", "Trade Flow"], as_index=False)["Value_USD_Bn"].sum()
+        fig = px.line(monthly_flow, x="Month", y="Value_USD_Bn", color="Trade Flow", markers=True,
+                      category_orders={"Month": month_labels}, color_discrete_map={"Imports": "#315B75", "Exports": TEAL},
+                      labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
+        fig.update_traces(line_width=3, marker_size=8)
+        fig.update_layout(hovermode="x unified", legend_title_text="")
+        render_chart(fig, "flow_monthly_trend", 380)
     else:
-        st.info("Monthly values are not available for the current selection.")
-    st.write("")
+        st.warning("Both flow-specific datasets are needed to calculate imports, exports and trade balance. The current values are not automatically labelled as imports or exports.")
+        st.markdown("""
+        **How to enable this page**
 
-    section(
-        "06 / Commodity composition",
-        "Where is recorded value concentrated?",
-        "Tile area represents each commodity group's recorded value "
-        "during the selected period."
-    )
+        1. Confirm the direction used for your existing `DGCIS_DATA.csv` download.
+        2. In the left sidebar, choose **Imports** or **Exports** for that file.
+        3. Download the opposite flow from DGCIS using matching HS chapters and the same period, then upload it in the corresponding **Import dataset CSV** or **Export dataset CSV** field.
+        4. Keep the same HS chapters (27, 28, 29, 39 and 40) and compare like-for-like months.
 
-    treemap_data = (
-        current.groupby("Commodity", as_index=False)["Value_USD_Bn"]
-        .sum()
-        .sort_values("Value_USD_Bn", ascending=False)
-    )
+        Once both are available, this page displays imports, exports, net trade balance, commodity comparisons and monthly trends.
+        """)
+        available_summary = current.groupby(["Commodity", "Trade Flow"], as_index=False)["Value_USD_Bn"].sum().sort_values("Value_USD_Bn", ascending=False)
+        if not available_summary.empty:
+            fig = px.bar(available_summary, x="Value_USD_Bn", y="Commodity", color="Trade Flow", orientation="h", color_discrete_sequence=PALETTE,
+                         labels={"Value_USD_Bn": "Recorded value (US$ billion)", "Commodity": "Commodity group"})
+            fig.update_layout(xaxis_title="Recorded value (US$ billion)", yaxis_title="")
+            render_chart(fig, "flow_available_only", 350)
 
-    if not treemap_data.empty:
-        fig = px.treemap(
-            treemap_data,
-            path=["Commodity"],
-            values="Value_USD_Bn",
-            color="Value_USD_Bn",
-            color_continuous_scale=[
-                "#DDEFF0",
-                "#6DA9BC",
-                "#087E8B",
-                "#142B3B",
-            ],
-            labels={
-                "Commodity": "Commodity group",
-                "Value_USD_Bn": "Value (US$ billion)",
-            },
-        )
-
-        fig.update_traces(
-            texttemplate="%{label}<br>US$%{value:.2f}B",
-            hovertemplate=(
-                "<b>%{label}</b><br>"
-                "Recorded value: US$%{value:.2f}B"
-                "<extra></extra>"
-            ),
-        )
-
-        fig.update_layout(
-            coloraxis_showscale=False,
-            margin=dict(l=10, r=10, t=15, b=10),
-        )
-
-        st.plotly_chart(
-            style_fig(fig, 370),
-            use_container_width=True,
-            config={"displayModeBar": False, "responsive": True},
-        )
-    
-
-# -----------------------------------------------------------------------------
-# Partner explorer tab
-# -----------------------------------------------------------------------------
-if selected_page == "Partner explorer":
-    st.write("")
-    section("06 / Partner-market drill-down", "Explore one trading partner in detail", "Choose a named market to compare its selected-period value, comparable prior-year value and commodity mix.")
+# =============================================================================
+# PAGE 4: PARTNER MARKETS
+# =============================================================================
+elif page == "Partner markets":
+    section("PARTNER EXPLORER", "Understand which markets drive recorded value", "Choose a partner to inspect its monthly trajectory, commodity mix, and year-on-year movement.")
     partner_options_df = partner_totals.copy()
     if partner_options_df.empty:
-        st.info("No named positive-value partner markets found for the selected filters.")
+        st.info("No named positive-value partner markets are available for this selection.")
     else:
-        # Rank options by selected-period value; the first option is the largest market.
         option_rows = partner_options_df["Country Name"].tolist()
         display_by_country = dict(zip(partner_options_df["Country Name"], partner_options_df["DisplayCountry"]))
-        default_partner = option_rows[0]
-        selected_partner = st.selectbox(
-            "Choose partner market",
-            option_rows,
-            index=0,
-            format_func=lambda c: display_by_country.get(c, c),
-        )
+        selected_partner = st.selectbox("Choose a partner market", option_rows, index=0, format_func=lambda c: display_by_country.get(c, c))
         market_current = named_current[named_current["Country Name"] == selected_partner].copy()
         market_prior = named_prior[named_prior["Country Name"] == selected_partner].copy()
         market_value = market_current["Value_USD_Mn"].sum()
         market_prev_value = market_prior["Value_USD_Mn"].sum()
-        market_yoy = (market_value / market_prev_value - 1) * 100 if market_prev_value > 0 else float("nan")
-        market_share = market_value / partner_total * 100 if partner_total > 0 else float("nan")
+        market_yoy = (market_value / market_prev_value - 1) * 100 if market_prev_value > 0 else np.nan
+        market_share = market_value / partner_sum * 100 if partner_sum > 0 else np.nan
         mc1, mc2, mc3, mc4 = st.columns(4, gap="medium")
         with mc1:
-            kpi_card("PARTNER VALUE", money(market_value), period_label, TEAL)
+            kpi_card("PARTNER VALUE", fmt_money_mn(market_value), period_label, TEAL)
         with mc2:
-            kpi_card("YEAR-ON-YEAR", pct(market_yoy) if not pd.isna(market_yoy) else "No baseline", f"Compared with same months in {prior_year}", GREEN if not pd.isna(market_yoy) and market_yoy >= 0 else RED)
+            kpi_card("YEAR-ON-YEAR", fmt_pct(market_yoy), f"Comparable months in {prior_year}", GREEN if pd.notna(market_yoy) and market_yoy >= 0 else RED)
         with mc3:
-            kpi_card("SHARE OF NAMED MARKETS", f"{market_share:.1f}%" if not pd.isna(market_share) else "—", "Share within the selected filters", "#315B75")
+            kpi_card("SHARE OF NAMED MARKETS", f"{market_share:.1f}%" if pd.notna(market_share) else "—", "Within current filters", "#315B75")
         with mc4:
-            market_leader = market_current.groupby("Commodity")["Value_USD_Mn"].sum().sort_values(ascending=False)
-            main_market_commodity = market_leader.index[0] if not market_leader.empty else "—"
-            kpi_card("TOP COMMODITY", main_market_commodity, money(market_leader.iloc[0]) if not market_leader.empty else "No value", "#D39B49")
+            market_commodity = market_current.groupby("Commodity")["Value_USD_Mn"].sum().sort_values(ascending=False)
+            kpi_card("TOP COMMODITY", market_commodity.index[0] if not market_commodity.empty else "—", fmt_money_mn(market_commodity.iloc[0]) if not market_commodity.empty else "No value", "#D39B49")
 
-        chart_left, chart_right = st.columns([1.3, 1], gap="large")
-        with chart_left:
-            market_frames = []
-            for market_df, label in [(market_prior, f"{prior_year} · comparable"), (market_current, f"{year}{' · YTD' if partial else ''}")]:
-                if market_df.empty:
-                    continue
-                mm = market_df.groupby(["MonthNum", "Month"], as_index=False)["Value_USD_Mn"].sum()
-                mm["Value_USD_Bn"] = mm["Value_USD_Mn"] / 1000
-                mm["Period"] = label
-                market_frames.append(mm)
-            if market_frames:
-                mtrend = pd.concat(market_frames, ignore_index=True)
-                fig = px.line(mtrend, x="Month", y="Value_USD_Bn", color="Period", markers=True,
-                              category_orders={"Month": period_month_order},
-                              color_discrete_map={f"{prior_year} · comparable": "#A3B3C2", f"{year}{' · YTD' if partial else ''}": TEAL},
-                              labels={"Month": "Month", "Value_USD_Bn": "Value (US$ billion)"})
-                fig.update_traces(line_width=3, marker_size=6, hovertemplate="%{x}<br>US$%{y:,.2f}B<extra>%{fullData.name}</extra>")
-                fig.update_layout(hovermode="x unified", legend_title_text="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
-                st.plotly_chart(style_fig(fig, 370), use_container_width=True, config={"displayModeBar": False})
-        with chart_right:
-            cmix = market_current.groupby("Commodity", as_index=False)["Value_USD_Mn"].sum().sort_values("Value_USD_Mn", ascending=False)
-            cmix["Value_USD_Bn"] = cmix["Value_USD_Mn"] / 1000
-            if not cmix.empty:
-                fig = px.bar(cmix.sort_values("Value_USD_Bn"), x="Value_USD_Bn", y="Commodity", orientation="h",
-                             text="Value_USD_Bn", labels={"Value_USD_Bn": "Value (US$ billion)", "Commodity": "Commodity"})
-                fig.update_traces(marker_color=TEAL, text=[money_bn(v) if v >= 1 else money(v * 1000) for v in cmix.sort_values("Value_USD_Bn")["Value_USD_Bn"]], textposition="outside", cliponaxis=False,
-                                  hovertemplate="%{y}<br>US$%{x:,.3f}B<extra></extra>")
-                fig.update_layout(showlegend=False, yaxis_title="", xaxis_title="Value (US$ billion)")
-                fig.update_xaxes(range=[0, float(cmix["Value_USD_Bn"].max()) * 1.28])
-                st.plotly_chart(style_fig(fig, 370, horizontal=True), use_container_width=True, config={"displayModeBar": False})
-            else:
-                st.info("No commodity breakdown available for this market.")
+        left, right = st.columns([1.15, 1], gap="large")
+        with left:
+            market_monthly = []
+            for frame, name in [(market_prior, f"{prior_year} · comparable"), (market_current, f"{selected_year}{' · YTD' if partial else ''}")]:
+                if not frame.empty:
+                    mm = frame.groupby(["MonthNum", "Month"], as_index=False)["Value_USD_Bn"].sum()
+                    mm["Period"] = name
+                    market_monthly.append(mm)
+            if market_monthly:
+                trend = pd.concat(market_monthly, ignore_index=True)
+                fig = px.line(trend, x="Month", y="Value_USD_Bn", color="Period", markers=True,
+                              category_orders={"Month": month_labels}, color_discrete_sequence=["#A3B3C2", TEAL],
+                              labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
+                fig.update_traces(line_width=3, marker_size=7)
+                fig.update_layout(hovermode="x unified", legend_title_text="")
+                render_chart(fig, "partner_monthly_trend", 370)
+        with right:
+            market_commodity = market_current.groupby("Commodity", as_index=False)["Value_USD_Bn"].sum().sort_values("Value_USD_Bn")
+            if not market_commodity.empty:
+                fig = px.bar(market_commodity, x="Value_USD_Bn", y="Commodity", orientation="h", color="Commodity", color_discrete_sequence=PALETTE,
+                             labels={"Value_USD_Bn": "Value (US$ billion)", "Commodity": "Commodity group"})
+                fig.update_layout(showlegend=False, xaxis_title="Value (US$ billion)", yaxis_title="")
+                render_chart(fig, "partner_commodity_mix", 370, legend=False)
 
-        market_compare = []
+        st.write("")
+        section("MARKET RANKING", "Compare the largest named partner markets", "The table and chart exclude aggregate or unspecified country labels.")
+        top = partner_totals.head(15).sort_values("Value_USD_Mn")
+        top["Value_USD_Bn"] = top["Value_USD_Mn"] / 1000
+        fig = px.bar(top, x="Value_USD_Bn", y="DisplayCountry", orientation="h", color="Value_USD_Bn", color_continuous_scale=["#BFE5E5", TEAL, NAVY],
+                     labels={"Value_USD_Bn": "Value (US$ billion)", "DisplayCountry": "Partner market"})
+        fig.update_layout(coloraxis_showscale=False, yaxis_title="", xaxis_title="Value (US$ billion)")
+        render_chart(fig, "partner_ranking", 470, legend=False)
+
+        compare_rows = []
         for commodity in selected_commodities:
             cv = market_current.loc[market_current["Commodity"] == commodity, "Value_USD_Mn"].sum()
             pv = market_prior.loc[market_prior["Commodity"] == commodity, "Value_USD_Mn"].sum()
-            market_compare.append({"Commodity": commodity, "Selected period (US$ B)": cv / 1000,
-                                   "Comparable prior (US$ B)": pv / 1000,
-                                   "YoY change (%)": (cv / pv - 1) * 100 if pv > 0 else float("nan")})
-        mtable = pd.DataFrame(market_compare)
-        mtable["Selected period (US$ B)"] = mtable["Selected period (US$ B)"].map(lambda v: f"${v:,.2f}B")
-        mtable["Comparable prior (US$ B)"] = mtable["Comparable prior (US$ B)"].map(lambda v: f"${v:,.2f}B")
-        mtable["YoY change (%)"] = mtable["YoY change (%)"].map(pct)
-        st.dataframe(mtable, use_container_width=True, hide_index=True, height=compact_table_height(len(mtable), max_height=320))
+            compare_rows.append({"Commodity": commodity, "Selected period (US$ B)": cv / 1000, "Comparable prior (US$ B)": pv / 1000, "YoY change (%)": (cv / pv - 1) * 100 if pv > 0 else np.nan})
+        compare = pd.DataFrame(compare_rows)
+        st.dataframe(compare, use_container_width=True, hide_index=True, height=compact_height(len(compare), max_height=320),
+                     column_config={"Selected period (US$ B)": st.column_config.NumberColumn(format="$%.2fB"), "Comparable prior (US$ B)": st.column_config.NumberColumn(format="$%.2fB"), "YoY change (%)": st.column_config.NumberColumn(format="%.1f%%")})
 
-# -----------------------------------------------------------------------------
-# Data & methodology tab
-# -----------------------------------------------------------------------------
-elif selected_page == "Data & methodology":
-    st.write("")
-    section("07 / Data explorer", "Inspect and export the underlying records", "The table uses the selected analysis year and commodity filters. Values are presented in US dollars million, as supplied by the source CSV.")
-    search = st.text_input("Search country or commodity", placeholder="e.g. United States, plastics, organic chemicals")
-    table = current[["Date", "Year", "Country Name", "HS Code", "Commodity", "Value_USD_Mn"]].copy()
+# =============================================================================
+# PAGE 5: DATA & METHODOLOGY
+# =============================================================================
+else:
+    section("DATA & METHODOLOGY", "Inspect, validate and export the underlying records", "Use this page to check the data behind the visuals and download a filtered extract for further analysis.")
+    st.markdown(
+        "<div class='info-panel'><b>How the dashboard calculates values:</b> each monthly USD million column is reshaped into one row per HS chapter, partner, month, and flow. The app removes aggregate TOTAL country rows, maps the five selected HS chapters to readable commodity labels, and converts USD million to USD billion for selected charts. Year-on-year comparisons use matching months.</div>",
+        unsafe_allow_html=True,
+    )
+    search = st.text_input("Search country, commodity, category or HS code", placeholder="e.g. United States, plastics, chemical intermediates, 39")
+    table = current[["Date", "Year", "Trade Flow", "Country Name", "HS Code", "HS Description", "Commodity", "Commodity Category", "Value_USD_Mn"]].copy()
     table = table.rename(columns={"Value_USD_Mn": "Value (US$ million)"})
     if search.strip():
-        q = search.strip().casefold()
-        keep = table["Country Name"].astype(str).str.casefold().str.contains(q, na=False) | table["Commodity"].astype(str).str.casefold().str.contains(q, na=False) | table["HS Code"].astype(str).str.contains(q, na=False)
-        table = table[keep]
+        query = search.strip().casefold()
+        searchable = ["Country Name", "HS Description", "Commodity", "Commodity Category", "HS Code", "Trade Flow"]
+        mask = pd.Series(False, index=table.index)
+        for col in searchable:
+            mask = mask | table[col].astype(str).str.casefold().str.contains(query, na=False)
+        table = table[mask]
     table = table.sort_values("Value (US$ million)", ascending=False)
-    data_left, data_right = st.columns([1, 1], gap="large")
-    with data_left:
-        st.markdown("**Dataset snapshot**")
-        snapshot = pd.DataFrame({
-            "Field": ["Monthly observations (all years)", "Country × HS-code combinations", "Commodity groups in current view", "Country / partner labels", "Available years", "Latest available month"],
-            "Value": [f"{len(data):,}", f"{data[['HS Code', 'Country Name']].drop_duplicates().shape[0]:,}", f"{len(selected_commodities)}", f"{data['Country Name'].nunique():,}", f"{min(years)}–{max(years)}", pd.Timestamp(year=latest_year, month=max(latest_months), day=1).strftime("%B %Y")],
-        })
-        st.dataframe(snapshot, use_container_width=True, hide_index=True, height=compact_table_height(len(snapshot), max_height=280))
-    with data_right:
-        st.markdown("**Definitions and limitations**")
-        st.markdown("""
-- **HS chapters included:** 27 mineral fuels and oils; 28 inorganic chemicals; 29 organic chemicals; 39 plastics; 40 rubber.
-- **Units:** the source columns are in USD million. Charts convert values to USD billion for readability.
-- **Year-on-year:** selected months are compared with the same months in the preceding year.
-- **Partial year:** a year with fewer than 12 available months is labelled YTD.
-- **Trade direction:** the CSV has no explicit import/export field. Verify the DGCIS query settings before claiming this is imports, exports, or total trade.
-- **Category scope:** these are broad HS chapters, not a perfectly isolated petrochemical-only classification.
-- **Interpretation:** observed growth and concentration are descriptive; this dashboard does not infer causes or forecast future values.
-        """)
+
+    a, b, c = st.columns(3, gap="medium")
+    with a:
+        kpi_card("ROWS IN CURRENT VIEW", f"{len(table):,}", "After year, commodity and search filters", TEAL)
+    with b:
+        kpi_card("SOURCE YEARS", f"{min(years)}–{max(years)}", "Available reporting years", "#315B75")
+    with c:
+        latest_date = data["Date"].max()
+        kpi_card("LATEST SOURCE MONTH", latest_date.strftime("%b %Y"), "Latest date present in loaded data", "#D39B49")
+
     st.write("")
-    st.markdown(f"**Filtered records: {len(table):,}**")
-    st.dataframe(table, use_container_width=True, hide_index=True, height=480,
-                 column_config={"Date": st.column_config.DateColumn("Month", format="MMM YYYY"),
-                                "Value (US$ million)": st.column_config.NumberColumn("Value (US$ million)", format="%.2f")})
+    with st.expander("Commodity taxonomy and scope", expanded=True):
+        tax_rows = []
+        for code, info in COMMODITY_INFO.items():
+            if info["commodity"] in selected_commodities:
+                tax_rows.append({"HS chapter": code, "Commodity group": info["commodity"], "Analytical category": info["category"], "Description / limitation": info["description"]})
+        st.dataframe(pd.DataFrame(tax_rows), use_container_width=True, hide_index=True)
+
+    st.markdown("**Definitions and limitations**")
+    st.markdown("""
+- **HS chapters:** 27 mineral fuels and oils; 28 inorganic chemicals; 29 organic chemicals; 39 plastics and articles; 40 rubber and articles.
+- **Analytical category:** a human-readable grouping added by this app to help organize the broad HS chapters; it is not a separate official DGCIS field.
+- **Units:** source values are in US$ million; some charts divide by 1,000 and show US$ billion.
+- **Import/export direction:** the CSV itself does not identify direction. Only a dataset you explicitly classify as Imports or Exports appears in that flow. Unknown direction is retained as “Direction not verified”.
+- **Trade balance:** calculated as exports minus imports only when both datasets are loaded. Missing direction is never silently treated as zero.
+- **Partial year:** year-on-year comparison uses the months common to all loaded flows in the selected year and the same months from the prior year.
+- **Scope limitation:** these are broad HS chapters related to petroleum, chemicals, plastics and rubber. They are not an exact list of every petrochemical product.
+- **Interpretation:** trends and concentration measures describe this dataset; they do not establish the causes behind a change or forecast future values.
+    """)
+
+    st.write("")
+    section("FILTERED RECORDS", "Browse the source observations", f"Showing {len(table):,} filtered rows for the selected period and commodity groups.")
+    st.dataframe(
+        table,
+        use_container_width=True,
+        hide_index=True,
+        height=480,
+        column_config={
+            "Date": st.column_config.DateColumn("Month", format="MMM YYYY"),
+            "Value (US$ million)": st.column_config.NumberColumn("Value (US$ million)", format="%.3f"),
+        },
+    )
     st.download_button(
-        "Download filtered CSV",
+        "Download filtered data as CSV",
         data=table.to_csv(index=False).encode("utf-8"),
-        file_name=f"petrotrade_{year}_filtered.csv",
+        file_name=f"petrotrade_{selected_year}_filtered.csv",
         mime="text/csv",
         type="primary",
     )
 
 st.divider()
 st.markdown(
-    "<div class='panel-note'>Data source: DGCIS CSV supplied for this project. Country labels are lightly normalized for display only. The dataset does not identify the trade direction, and HS chapters are broad groups. Insights summarize recorded patterns and should not be interpreted as causal claims.</div>",
+    "<div class='panel-note'>PetroTrade Intelligence · DGCIS CSV supplied for this project. Commodity groups are derived from HS chapters. The app preserves the distinction between imported, exported, and unverified trade-flow data. Hover over charts for values; use each chart's modebar to zoom, pan, or download the image.</div>",
     unsafe_allow_html=True,
 )
