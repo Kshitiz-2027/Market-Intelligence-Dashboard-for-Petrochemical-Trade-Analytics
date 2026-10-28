@@ -182,6 +182,8 @@ div[data-testid="stDataFrame"] { border:1px solid #E3DED4; border-radius:9px; ov
 .control-deck-sub { color:#68727D; font-size:.82rem; margin-bottom:.8rem; line-height:1.5; }
 .scope-strip { display:flex; align-items:center; flex-wrap:wrap; gap:.55rem; background:#F0EEE8; border:1px solid #E3DED4; color:#405461; border-radius:8px; padding:.62rem .85rem; margin:.65rem 0 .95rem; font-size:.79rem; }
 .scope-pill { background:#FFFEFC; border:1px solid #DED9CF; border-radius:6px; padding:.27rem .58rem; color:#263844; font-weight:700; }
+.scope-pill-status { background:#E7F0EA; border-color:#D4E2D8; color:#315D49; }
+.scope-pill-muted { background:transparent; border-style:dashed; color:#68727D; font-weight:600; }
 div[data-testid="stForm"] { background:#F8F6F1; border:1px solid #E3DED4; border-radius:10px; padding:.75rem; }
 hr { border-color:#E3DED4; }
 @keyframes fadeSlideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
@@ -702,11 +704,16 @@ prior = base_filtered[(base_filtered["Year"] == prior_year) & base_filtered["Mon
 if current.empty:
     st.warning("No records match this combination of period, commodity and partner filters. Widen the live controls above and try again.")
     st.stop()
-partial = len(months_present) < 12
-period_start = pd.Timestamp(year=2000, month=min(months_present), day=1).strftime("%b")
-period_end = pd.Timestamp(year=2000, month=max(months_present), day=1).strftime("%b")
-period_label = f"{period_start}–{period_end} {selected_year}" if partial else f"Jan–Dec {selected_year}"
 month_labels = [pd.Timestamp(year=2000, month=m, day=1).strftime("%b") for m in months_present]
+full_year_selected = months_present == list(range(1, 13))
+contiguous_month_selection = months_present == list(range(min(months_present), max(months_present) + 1))
+partial = not full_year_selected
+if full_year_selected:
+    period_label = f"Jan–Dec {selected_year}"
+elif contiguous_month_selection:
+    period_label = f"{month_labels[0]}–{month_labels[-1]} {selected_year}"
+else:
+    period_label = f"Custom months · {selected_year}"
 
 current_total_mn = current["Value_USD_Mn"].sum()
 prior_total_mn = prior["Value_USD_Mn"].sum()
@@ -732,14 +739,23 @@ has_both_flows = has_imports and has_exports
 # Applied scope ribbon and top navigation
 # =============================================================================
 market_label = selected_market if selected_market != "All partner markets" else "All partner markets"
-month_window_label = ", ".join(month_labels)
+# Keep persistent context visible without placing large warning banners between
+# navigation and the active analysis. Full explanations live in Data & methodology.
+if has_both_flows:
+    flow_status_label = "Imports + exports loaded"
+elif "Direction not verified" in known_flows:
+    flow_status_label = "Direction not verified"
+else:
+    flow_status_label = ", ".join(available_flows) + " only"
+comparison_status_label = f"YoY basis · same months vs {prior_year}"
+
 st.markdown(
     "<div class='scope-strip'><b>LIVE VIEW</b>"
     f"<span class='scope-pill'>{safe(period_label)}</span>"
     f"<span class='scope-pill'>{len(selected_commodities)} HS chapters</span>"
     f"<span class='scope-pill'>{safe(market_label)}</span>"
-    f"<span class='scope-pill'>{safe(month_window_label)}</span>"
-    f"<span class='scope-pill'>{len(known_flows)} flow(s) loaded</span></div>",
+    f"<span class='scope-pill scope-pill-status'>{safe('Flow · ' + flow_status_label)}</span>"
+    f"<span class='scope-pill scope-pill-muted'>{safe(comparison_status_label)}</span></div>",
     unsafe_allow_html=True,
 )
 
@@ -751,19 +767,6 @@ page = st.radio(
     label_visibility="collapsed",
     key="main_navigation",
 )
-
-if not has_both_flows:
-    st.markdown(
-        "<div class='callout'><b>Data-flow note:</b> This workspace currently has "
-        + safe(", ".join(available_flows))
-        + ". Import/export comparisons and trade balance are only calculated after both flow-specific datasets are loaded. The app does not guess direction from values.</div>",
-        unsafe_allow_html=True,
-    )
-if partial:
-    st.markdown(
-        f"<div class='callout'><b>Comparable-period rule:</b> {selected_year} contains {len(months_present)} comparable months in the selected flow data. Year-on-year figures use the same months of {prior_year}.</div>",
-        unsafe_allow_html=True,
-    )
 
 # =============================================================================
 # PAGE 1: OVERVIEW
@@ -1332,10 +1335,13 @@ elif page == "Concentration & risk":
         "<div class='info-panel'><b>What this analysis measures:</b> concentration of recorded value across named country labels. Top-3 and top-5 shares show how much value sits with the largest markets; HHI is the sum of squared market shares (shares expressed as percentages), on a 0–10,000 scale. These are screening indicators, not predictions or formal legal risk assessments.</div>",
         unsafe_allow_html=True,
     )
-    st.markdown(
-        "<div class='callout'><b>Scope note:</b> concentration must be calculated across all named markets. This page intentionally ignores the single <i>Partner market</i> choice in the global controls, otherwise a one-country filter would make that country appear to represent 100% of the market. Commodity, category, year and month selections still apply.</div>",
-        unsafe_allow_html=True,
-    )
+    with st.expander("Why the partner-market filter is ignored here", expanded=False):
+        st.write(
+            "Concentration must be measured across all named markets. This page ignores "
+            "the single Partner market selection in the global controls; otherwise a "
+            "one-country filter could make that country appear to represent 100% of the "
+            "market. Your selected year, months, commodity families and HS chapters still apply."
+        )
 
     risk_flow_options = []
     if has_both_flows:
@@ -1637,10 +1643,12 @@ elif page == "Concentration & risk":
             flow_interpretation = "The selected view combines imports and exports. Treat this as overall recorded-value concentration, not supplier dependency or export-destination dependency."
         else:
             flow_interpretation = "The direction of the selected flow is unverified. Results describe named-market concentration in recorded values only and should not be described as supplier or destination dependency."
-        st.markdown(
-            f"<div class='callout'><b>Interpretation guardrail:</b> {safe(flow_interpretation)} The top-5 and HHI thresholds are analyst-defined screening settings. They flag records for investigation; they do not prove that a commodity is risky.</div>",
-            unsafe_allow_html=True,
-        )
+        with st.expander("Interpretation and limitations", expanded=False):
+            st.write(
+                flow_interpretation
+                + " The top-5 and HHI thresholds are analyst-defined screening settings. "
+                "They flag records for investigation; they do not prove that a commodity is risky."
+            )
 
 # =============================================================================
 # PAGE 5: IMPORTS VS EXPORTS
@@ -1793,6 +1801,24 @@ else:
         "<div class='info-panel'><b>How the dashboard calculates values:</b> each monthly USD million column is reshaped into one row per HS chapter, partner, month, and flow. The app removes aggregate TOTAL country rows, maps the five selected HS chapters to readable commodity labels, and converts USD million to USD billion for selected charts. Year-on-year comparisons use matching months.</div>",
         unsafe_allow_html=True,
     )
+    with st.expander("Data-flow status and comparison rules", expanded=False):
+        status_left, status_right = st.columns(2, gap="large")
+        with status_left:
+            st.markdown("**Trade-flow status**")
+            if has_both_flows:
+                st.write("Both direction-labelled Imports and Exports datasets are loaded. Flow comparisons and trade balance can be calculated for overlapping selected periods.")
+            elif "Direction not verified" in known_flows:
+                st.write("The primary dataset is marked **Direction not verified**. Its values are presented as recorded trade values only. The app does not infer whether they are imports or exports.")
+                st.write("To enable flow comparison, verify the primary file's DGCIS query settings and load the opposite direction with matching HS chapters and reporting months.")
+            else:
+                st.write("Currently loaded flow(s): " + ", ".join(available_flows) + ". Import/export comparisons require both direction-labelled datasets.")
+        with status_right:
+            st.markdown("**Comparable-period rule**")
+            st.write(
+                f"Current selection: {period_label}. Year-on-year values use the selected months ({', '.join(month_labels)}) in {prior_year}. "
+                "This avoids comparing a partial year against a full year. If the prior-period denominator is zero or missing, percentage growth is left unavailable."
+            )
+            st.caption("These notes explain the calculations; they do not indicate a data error by themselves.")
     search = st.text_input("Search country, commodity, category or HS code", placeholder="e.g. United States, plastics, chemical intermediates, 39")
     table = current[["Date", "Year", "Trade Flow", "Country Name", "HS Code", "HS Description", "Commodity", "Commodity Category", "Value_USD_Mn"]].copy()
     table = table.rename(columns={"Value_USD_Mn": "Value (US$ million)"})
