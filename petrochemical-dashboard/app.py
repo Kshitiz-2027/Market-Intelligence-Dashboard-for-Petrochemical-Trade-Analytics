@@ -91,6 +91,47 @@ h1, h2, h3, h4, h5, h6, .hero-title, .section-title, .control-deck-title {
 #MainMenu { visibility: hidden; }
 footer { visibility: hidden; }
 .eyebrow { font-size: .70rem; letter-spacing: .17em; font-weight: 800; color: #E46F4A; text-transform: uppercase; }
+
+/* Landing / welcome page */
+.landing-shell { max-width: 1500px; margin: 0 auto; }
+.landing-hero {
+  position: relative; overflow: hidden; display: grid;
+  grid-template-columns: minmax(0, 1.38fr) minmax(270px, .62fr); gap: 2.1rem;
+  padding: clamp(1.8rem, 4vw, 3.6rem); min-height: 380px;
+  border-radius: 16px 30px 16px 30px;
+  background: linear-gradient(118deg, #172A3A 0%, #243847 60%, #344E5B 100%);
+  color: #F5F3EE; border-left: 6px solid #E46F4A;
+  box-shadow: 0 18px 45px rgba(23,42,58,.14); animation: fadeSlideIn .65s ease both;
+}
+.landing-hero:before { content:""; position:absolute; width:390px; height:390px; border-radius:50%; right:-105px; top:-170px; border:1px solid rgba(242,167,142,.25); box-shadow:0 0 0 42px rgba(242,167,142,.035),0 0 0 90px rgba(242,167,142,.025); pointer-events:none; }
+.landing-main, .landing-aside { position:relative; z-index:1; }
+.landing-kicker { color:#F2A78E; font-size:.7rem; font-weight:850; letter-spacing:.2em; text-transform:uppercase; margin-bottom:1.1rem; }
+.landing-title { max-width:800px; font-family:'Space Grotesk','DM Sans','Segoe UI',sans-serif; font-size:clamp(2.4rem,4.8vw,4.45rem); line-height:1.02; font-weight:750; letter-spacing:-.065em; margin-bottom:1.15rem; }
+.landing-title span { color:#F2A78E; }
+.landing-copy { max-width:760px; color:#D7E1E4; font-size:1rem; line-height:1.75; }
+.landing-chips { display:flex; flex-wrap:wrap; gap:.55rem; margin-top:1.35rem; }
+.landing-chip { border:1px solid rgba(255,255,255,.20); background:rgba(255,255,255,.065); border-radius:7px; padding:.42rem .68rem; font-size:.76rem; color:#F4ECE8; }
+.landing-aside { align-self:stretch; display:flex; flex-direction:column; justify-content:center; padding:1.3rem 1.4rem; border:1px solid rgba(255,255,255,.18); border-radius:14px; background:rgba(255,255,255,.055); backdrop-filter:blur(4px); }
+.landing-aside-title { color:#F2A78E; font-size:.68rem; letter-spacing:.17em; font-weight:850; text-transform:uppercase; margin-bottom:1rem; }
+.landing-route { display:grid; grid-template-columns:34px 1fr; gap:.8rem; padding:.9rem 0; border-bottom:1px solid rgba(255,255,255,.12); }
+.landing-route:last-of-type { border-bottom:0; }
+.landing-route-num { width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:rgba(242,167,142,.15); color:#F2A78E; font-weight:850; font-size:.78rem; }
+.landing-route-title { font-weight:750; font-size:.91rem; color:#FFFFFF; margin-bottom:.2rem; }
+.landing-route-copy { color:#CCD8DC; font-size:.79rem; line-height:1.45; }
+.landing-stat { min-height:100px; background:#FFFEFC; border:1px solid #DED9CF; border-radius:12px; padding:1rem 1.05rem; box-shadow:0 3px 10px rgba(23,42,58,.035); }
+.landing-stat-label { color:#68727D; font-weight:750; font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; margin-bottom:.55rem; }
+.landing-stat-value { color:#172A3A; font-family:'Space Grotesk','DM Sans','Segoe UI',sans-serif; font-size:1.6rem; line-height:1.15; font-weight:750; letter-spacing:-.04em; }
+.landing-stat-foot { color:#7B858D; font-size:.75rem; line-height:1.45; margin-top:.45rem; }
+.landing-section-title { color:#172A3A; font-family:'Space Grotesk','DM Sans','Segoe UI',sans-serif; font-size:1.35rem; font-weight:750; letter-spacing:-.035em; margin:.35rem 0 .25rem; }
+.landing-section-copy { color:#68727D; font-size:.9rem; line-height:1.6; margin-bottom:1rem; }
+.landing-feature { height:100%; min-height:165px; padding:1.15rem; background:#FFFEFC; border:1px solid #DED9CF; border-radius:12px; transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.landing-feature:hover { transform:translateY(-4px); box-shadow:0 12px 24px rgba(23,42,58,.07); border-color:#E5B19D; }
+.landing-feature-icon { width:38px; height:38px; display:flex; align-items:center; justify-content:center; background:#FBE8DF; color:#A94328; border-radius:9px; font-size:1.1rem; margin-bottom:.8rem; }
+.landing-feature-title { font-size:.98rem; font-weight:780; color:#172A3A; margin-bottom:.4rem; }
+.landing-feature-copy { font-size:.82rem; color:#68727D; line-height:1.55; }
+.landing-footnote { background:#FDF4E4; border:1px solid #EED7A7; color:#6E531F; border-radius:10px; padding:.8rem 1rem; font-size:.82rem; line-height:1.55; }
+@media (max-width: 900px) { .landing-hero { grid-template-columns:1fr; gap:1.3rem; } .landing-title { font-size:2.55rem; } .landing-aside { padding:1rem; } }
+
 .hero {
   background: linear-gradient(115deg, #172A3A 0%, #243847 68%, #344E5B 100%);
   color: white; padding: 1.9rem 2rem; border-radius: 13px 26px 13px 26px;
@@ -346,6 +387,133 @@ def build_commodity_ledger(current_data, prior_data, commodity_names, available_
 
 
 # =============================================================================
+# Landing / welcome page (shown before the analytics workspace)
+# =============================================================================
+if "petrotrade_workspace_entered" not in st.session_state:
+    st.session_state["petrotrade_workspace_entered"] = False
+
+if not st.session_state["petrotrade_workspace_entered"]:
+    # Use the real local CSV for a compact preview, but do not label its
+    # direction as imports or exports unless the user verifies the source query.
+    preview = None
+    preview_error = None
+    if DATA_FILE.exists():
+        try:
+            preview = parse_trade_csv(DATA_FILE.read_bytes(), "Direction not verified")
+        except Exception as exc:
+            preview_error = str(exc)
+
+    if preview is not None and not preview.empty:
+        preview_year = int(preview["Year"].max())
+        preview_latest = preview[preview["Year"] == preview_year].copy()
+        preview_months = int(preview_latest["MonthNum"].nunique())
+        preview_value = float(preview_latest["Value_USD_Mn"].sum())
+        preview_partners = int(named_rows(preview_latest).loc[lambda x: x["Value_USD_Mn"] > 0, "DisplayCountry"].nunique())
+        preview_hs = int(preview["HS Code"].nunique())
+        preview_year_text = f"{preview_year} · {preview_months} month{'s' if preview_months != 1 else ''}"
+        preview_value_text = fmt_money_mn(preview_value)
+        preview_partner_text = f"{preview_partners:,}"
+        preview_hs_text = f"{preview_hs}"
+        preview_range = f"{int(preview['Year'].min())}–{int(preview['Year'].max())}"
+        source_status = "DGCIS source file detected"
+    else:
+        preview_year_text = "Awaiting data"
+        preview_value_text = "—"
+        preview_partner_text = "—"
+        preview_hs_text = "5"
+        preview_range = "Monthly records"
+        source_status = "Connect a DGCIS CSV to begin"
+
+    st.markdown(
+        "<div class='landing-shell'>"
+        "<div class='landing-hero'>"
+        "<div class='landing-main'>"
+        "<div class='landing-kicker'>INDIA TRADE INTELLIGENCE · MARKET EXPLORATION</div>"
+        "<div class='landing-title'>See the signal behind <span>commodity trade.</span></div>"
+        "<div class='landing-copy'>PetroTrade Intelligence turns monthly trade records into a clear view of commodity performance, partner markets and trade patterns. Start with the market snapshot, then shape the analysis around the year, months, commodity groups and countries that matter to your question.</div>"
+        f"<div class='landing-chips'><span class='landing-chip'>{safe(source_status)}</span>"
+        f"<span class='landing-chip'>Reporting coverage · {safe(preview_range)}</span>"
+        "<span class='landing-chip'>HS chapters 27 · 28 · 29 · 39 · 40</span></div>"
+        "</div>"
+        "<div class='landing-aside'>"
+        "<div class='landing-aside-title'>From data to decision support</div>"
+        "<div class='landing-route'><div class='landing-route-num'>01</div><div><div class='landing-route-title'>Shape your market view</div><div class='landing-route-copy'>Choose a reporting period, commodity families, HS chapters and partner markets.</div></div></div>"
+        "<div class='landing-route'><div class='landing-route-num'>02</div><div><div class='landing-route-title'>Explore the signals</div><div class='landing-route-copy'>Compare recorded values, trends, category mix and market concentration.</div></div></div>"
+        "<div class='landing-route'><div class='landing-route-num'>03</div><div><div class='landing-route-title'>Inspect the evidence</div><div class='landing-route-copy'>Drill into country records and export the filtered data for further analysis.</div></div></div>"
+        "</div></div></div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
+    stat_cols = st.columns(4, gap="medium")
+    stat_items = [
+        ("LATEST PERIOD", preview_year_text, "The latest year and available monthly coverage"),
+        ("RECORDED VALUE", preview_value_text, "Source value for the latest year; direction must be verified"),
+        ("NAMED MARKETS", preview_partner_text, "Positive-value partner labels in the latest year"),
+        ("HS CHAPTERS", preview_hs_text, "Commodity chapters present in the source extract"),
+    ]
+    for col, (label, value, foot) in zip(stat_cols, stat_items):
+        with col:
+            st.markdown(
+                f"<div class='landing-stat'><div class='landing-stat-label'>{safe(label)}</div>"
+                f"<div class='landing-stat-value'>{safe(value)}</div>"
+                f"<div class='landing-stat-foot'>{safe(foot)}</div></div>",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<div class='landing-section-title'>One workspace, four analytical lenses</div>", unsafe_allow_html=True)
+    st.markdown("<div class='landing-section-copy'>The preview introduces the areas available after you enter the dashboard. Every view is driven by the selected records, rather than static example numbers.</div>", unsafe_allow_html=True)
+    feature_cols = st.columns(4, gap="medium")
+    feature_items = [
+        ("◈", "Market overview", "Track headline recorded value, year-on-year movement, monthly peaks and commodity contribution."),
+        ("▥", "Commodity intelligence", "Compare HS chapters, inspect month-by-month patterns and identify categories gaining or losing value."),
+        ("◎", "Partner markets", "Rank named partners, inspect a selected country and understand how value is distributed across markets."),
+        ("⇄", "Trade-flow analysis", "Compare imports, exports and trade balance when both direction-verified datasets are available."),
+    ]
+    for col, (icon, title, copy) in zip(feature_cols, feature_items):
+        with col:
+            st.markdown(
+                f"<div class='landing-feature'><div class='landing-feature-icon'>{safe(icon)}</div>"
+                f"<div class='landing-feature-title'>{safe(title)}</div>"
+                f"<div class='landing-feature-copy'>{safe(copy)}</div></div>",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<div style='height:.9rem'></div>", unsafe_allow_html=True)
+    action_cols = st.columns([1.25, 1.55, 3.2], gap="medium")
+    with action_cols[0]:
+        enter_clicked = st.button("Explore dashboard  →", type="primary", use_container_width=True, key="landing_enter_dashboard")
+    with action_cols[1]:
+        method_clicked = st.button("Read data methodology", use_container_width=True, key="landing_open_methodology")
+    with action_cols[2]:
+        st.caption("Built for exploratory analysis. The source file does not encode import/export direction; verify the DGCIS download settings before interpreting values as imports or exports.")
+
+    with st.expander("How to use PetroTrade", expanded=False):
+        st.markdown(
+            "1. Enter the workspace to choose a reporting year and month window.\n"
+            "2. Select the commodity families and HS chapters relevant to your question.\n"
+            "3. Explore the overview, commodity breakdown and partner-market pages.\n"
+            "4. Export filtered records from Data & methodology for independent validation.\n\n"
+            "**Important:** year-on-year comparisons use the same months in the previous year. A partial year is not comparable to a complete annual total."
+        )
+
+    if enter_clicked or method_clicked:
+        st.session_state["petrotrade_workspace_entered"] = True
+        st.session_state["main_navigation"] = "Data & methodology" if method_clicked else "Overview"
+        st.rerun()
+
+    if preview_error:
+        st.caption(f"Preview metrics could not be calculated from the source file: {preview_error}")
+    st.stop()
+
+# Small return path so users can revisit the landing / preview page.
+back_col, _ = st.columns([1.4, 8], gap="small")
+with back_col:
+    if st.button("← Welcome / preview", key="petrotrade_back_to_landing"):
+        st.session_state["petrotrade_workspace_entered"] = False
+        st.rerun()
+
+# =============================================================================
 # Main-canvas intro + data-source setup
 # =============================================================================
 st.markdown(
@@ -385,7 +553,10 @@ if not DATA_FILE.exists() and base_bytes is None:
     st.stop()
 
 try:
-    base_bytes = DATA_FILE.read_bytes()
+    # Use the local primary CSV when it exists; otherwise retain the upload bytes
+    # collected in the Data connections expander.
+    if DATA_FILE.exists():
+        base_bytes = DATA_FILE.read_bytes()
     frames = []
     # Explicit flow uploads take precedence over the base file for that flow.
     if imports_upload is not None:
