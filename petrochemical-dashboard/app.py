@@ -672,7 +672,7 @@ with st.container(border=True):
             index=1,
             key="workspace_top_markets_main",
         )
-    st.caption("Changes apply to every page immediately. Use the top navigation below to switch between the overview, commodity breakdown, market opportunity matrix, trade flows, partner markets, and data explorer.")
+    st.caption("Changes apply to every page immediately. Use the top navigation below to switch between the overview, commodity breakdown, market opportunity matrix, concentration and risk analysis, trade flows, partner markets, and data explorer.")
 
 if not selected_categories:
     st.warning("Select at least one commodity family in the live controls to continue.")
@@ -743,7 +743,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-pages = ["Overview", "Commodity breakdown", "Market opportunity matrix", "Imports vs exports", "Partner markets", "Data & methodology"]
+pages = ["Overview", "Commodity breakdown", "Market opportunity matrix", "Concentration & risk", "Imports vs exports", "Partner markets", "Data & methodology"]
 page = st.radio(
     "Main navigation",
     pages,
@@ -1320,7 +1320,330 @@ elif page == "Market opportunity matrix":
         )
 
 # =============================================================================
-# PAGE 4: IMPORTS VS EXPORTS
+# PAGE 4: MARKET CONCENTRATION & RISK ANALYSIS
+# =============================================================================
+elif page == "Concentration & risk":
+    section(
+        "MARKET CONCENTRATION & RISK",
+        "How dependent is each commodity on a small set of markets?",
+        "Measure how recorded values are distributed across named partner markets, compare concentration with the comparable period, and flag commodity groups for further review."
+    )
+    st.markdown(
+        "<div class='info-panel'><b>What this analysis measures:</b> concentration of recorded value across named country labels. Top-3 and top-5 shares show how much value sits with the largest markets; HHI is the sum of squared market shares (shares expressed as percentages), on a 0–10,000 scale. These are screening indicators, not predictions or formal legal risk assessments.</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<div class='callout'><b>Scope note:</b> concentration must be calculated across all named markets. This page intentionally ignores the single <i>Partner market</i> choice in the global controls, otherwise a one-country filter would make that country appear to represent 100% of the market. Commodity, category, year and month selections still apply.</div>",
+        unsafe_allow_html=True,
+    )
+
+    risk_flow_options = []
+    if has_both_flows:
+        risk_flow_options.append("Combined flows")
+    risk_flow_options.extend(available_flows)
+    if not risk_flow_options:
+        risk_flow_options = ["Direction not verified"]
+    if "Imports" in risk_flow_options:
+        default_risk_flow = "Imports"
+    elif "Direction not verified" in risk_flow_options:
+        default_risk_flow = "Direction not verified"
+    else:
+        default_risk_flow = risk_flow_options[0]
+
+    risk_ctrl1, risk_ctrl2, risk_ctrl3 = st.columns([1.2, 1, 1], gap="medium")
+    with risk_ctrl1:
+        risk_flow = st.selectbox(
+            "Trade flow for concentration analysis",
+            risk_flow_options,
+            index=risk_flow_options.index(default_risk_flow),
+            key="risk_analysis_flow",
+            help="Imports can indicate supplier exposure; exports can indicate destination exposure. If direction is unverified, results are only described as recorded-value concentration.",
+        )
+    with risk_ctrl2:
+        top5_flag_threshold = st.slider(
+            "Flag top-5 share at or above (%)",
+            min_value=30,
+            max_value=95,
+            value=45,
+            step=5,
+            key="risk_top5_threshold",
+            help="A user-defined screening threshold, not an official risk or regulatory cutoff.",
+        )
+    with risk_ctrl3:
+        hhi_flag_threshold = st.slider(
+            "Flag HHI at or above",
+            min_value=500,
+            max_value=8000,
+            value=600,
+            step=100,
+            key="risk_hhi_threshold",
+            help="A user-defined screening threshold on the 0–10,000 HHI scale.",
+        )
+
+    # Build the risk scope independently of the global partner-market filter.
+    risk_scope = data[
+        data["Commodity"].isin(selected_commodities)
+        & data["Commodity Category"].isin(selected_categories)
+        & data["MonthNum"].isin(months_present)
+    ].copy()
+    risk_current = risk_scope[risk_scope["Year"] == selected_year].copy()
+    risk_prior = risk_scope[risk_scope["Year"] == prior_year].copy()
+    if risk_flow != "Combined flows":
+        risk_current = risk_current[risk_current["Trade Flow"] == risk_flow].copy()
+        risk_prior = risk_prior[risk_prior["Trade Flow"] == risk_flow].copy()
+
+    risk_current_named = named_rows(risk_current)
+    risk_prior_named = named_rows(risk_prior)
+
+    def concentration_stats(country_values):
+        """Compute concentration measures from positive named-market values."""
+        clean = country_values.copy()
+        if clean.empty:
+            return {
+                "Total_Mn": np.nan, "Named markets": 0, "Largest market": "—",
+                "Top-1 share (%)": np.nan, "Top-3 share (%)": np.nan,
+                "Top-5 share (%)": np.nan, "HHI": np.nan,
+            }
+        clean = clean.groupby("DisplayCountry", as_index=False)["Value_USD_Mn"].sum()
+        clean = clean[clean["Value_USD_Mn"] > 0].sort_values("Value_USD_Mn", ascending=False)
+        total = float(clean["Value_USD_Mn"].sum())
+        if total <= 0 or clean.empty:
+            return {
+                "Total_Mn": total, "Named markets": 0, "Largest market": "—",
+                "Top-1 share (%)": np.nan, "Top-3 share (%)": np.nan,
+                "Top-5 share (%)": np.nan, "HHI": np.nan,
+            }
+        shares = clean["Value_USD_Mn"] / total * 100
+        return {
+            "Total_Mn": total,
+            "Named markets": int(clean["DisplayCountry"].nunique()),
+            "Largest market": str(clean.iloc[0]["DisplayCountry"]),
+            "Top-1 share (%)": float(shares.head(1).sum()),
+            "Top-3 share (%)": float(shares.head(3).sum()),
+            "Top-5 share (%)": float(shares.head(5).sum()),
+            "HHI": float((shares ** 2).sum()),
+        }
+
+    def summarize_by_commodity(frame):
+        if frame.empty:
+            return pd.DataFrame(columns=[
+                "Commodity", "Total_Mn", "Named markets", "Largest market",
+                "Top-1 share (%)", "Top-3 share (%)", "Top-5 share (%)", "HHI"
+            ])
+        rows = []
+        for commodity_name, group in frame.groupby("Commodity"):
+            stats = concentration_stats(group)
+            stats["Commodity"] = commodity_name
+            rows.append(stats)
+        return pd.DataFrame(rows)
+
+    if risk_current_named.empty:
+        st.warning("No named partner-market records are available for this flow and selection. Widen the commodity or period filters, or verify the dataset direction.")
+    else:
+        risk_now_summary = summarize_by_commodity(risk_current_named)
+        risk_prev_summary = summarize_by_commodity(risk_prior_named)
+        if risk_prev_summary.empty:
+            risk_prev_summary = pd.DataFrame(columns=["Commodity", "Top-5 share (%)", "HHI"])
+        risk_prev_summary = risk_prev_summary.rename(columns={
+            "Top-5 share (%)": "Prior top-5 share (%)",
+            "HHI": "Prior HHI",
+        })
+        risk_summary = risk_now_summary.merge(
+            risk_prev_summary[[c for c in ["Commodity", "Prior top-5 share (%)", "Prior HHI"] if c in risk_prev_summary.columns]],
+            on="Commodity", how="left"
+        )
+        risk_summary["Top-5 share change (pp)"] = risk_summary["Top-5 share (%)"] - risk_summary["Prior top-5 share (%)"]
+        risk_summary["HHI change"] = risk_summary["HHI"] - risk_summary["Prior HHI"]
+
+        def risk_flag(row):
+            high_top5 = pd.notna(row["Top-5 share (%)"]) and row["Top-5 share (%)"] >= top5_flag_threshold
+            high_hhi = pd.notna(row["HHI"]) and row["HHI"] >= hhi_flag_threshold
+            if high_top5 and high_hhi:
+                return "Flagged on both measures"
+            if high_top5:
+                return "Flagged: top-5 share"
+            if high_hhi:
+                return "Flagged: HHI"
+            return "Below selected thresholds"
+
+        def concentration_movement(row):
+            hhi_delta = row.get("HHI change", np.nan)
+            top5_delta = row.get("Top-5 share change (pp)", np.nan)
+            if pd.isna(hhi_delta) and pd.isna(top5_delta):
+                return "No comparable baseline"
+            if pd.notna(hhi_delta) and hhi_delta >= 100:
+                return "Concentration rising"
+            if pd.notna(hhi_delta) and hhi_delta <= -100:
+                return "Concentration easing"
+            if pd.notna(top5_delta) and top5_delta >= 3:
+                return "Top-5 share rising"
+            if pd.notna(top5_delta) and top5_delta <= -3:
+                return "Top-5 share easing"
+            return "Broadly stable"
+
+        risk_summary["Screening signal"] = risk_summary.apply(risk_flag, axis=1)
+        risk_summary["YoY concentration movement"] = risk_summary.apply(concentration_movement, axis=1)
+        risk_summary["Total value (US$ B) in scope"] = risk_summary["Total_Mn"] / 1000
+
+        portfolio_now = concentration_stats(risk_current_named)
+        portfolio_prev = concentration_stats(risk_prior_named)
+        portfolio_top5_change = (
+            portfolio_now["Top-5 share (%)"] - portfolio_prev["Top-5 share (%)"]
+            if pd.notna(portfolio_now["Top-5 share (%)"]) and pd.notna(portfolio_prev["Top-5 share (%)"])
+            else np.nan
+        )
+        portfolio_hhi_change = (
+            portfolio_now["HHI"] - portfolio_prev["HHI"]
+            if pd.notna(portfolio_now["HHI"]) and pd.notna(portfolio_prev["HHI"])
+            else np.nan
+        )
+
+        flagged_count = int(risk_summary["Screening signal"].str.startswith("Flagged").sum())
+        metric_cols = st.columns(4, gap="medium")
+        with metric_cols[0]:
+            kpi_card("TOP-5 MARKET SHARE", f"{portfolio_now['Top-5 share (%)']:.1f}%" if pd.notna(portfolio_now["Top-5 share (%)"]) else "—", "Across named partner values", TEAL)
+        with metric_cols[1]:
+            kpi_card("PORTFOLIO HHI", f"{portfolio_now['HHI']:,.0f}" if pd.notna(portfolio_now["HHI"]) else "—", "0–10,000 index; descriptive", "#365B78")
+        with metric_cols[2]:
+            kpi_card("COMMODITIES FLAGGED", f"{flagged_count} / {len(risk_summary)}", f"Top-5 ≥ {top5_flag_threshold}% or HHI ≥ {hhi_flag_threshold:,}", RED if flagged_count else GREEN)
+        with metric_cols[3]:
+            kpi_card("TOP-5 SHARE CHANGE", f"{portfolio_top5_change:+.1f} pp" if pd.notna(portfolio_top5_change) else "—", f"Vs. comparable months in {prior_year}", RED if pd.notna(portfolio_top5_change) and portfolio_top5_change > 0 else GREEN)
+
+        st.write("")
+        section(
+            "CONCENTRATION PROFILE",
+            "Which commodity groups rely on the fewest partner markets?",
+            "Top-5 share and HHI summarize the partner-value distribution within each commodity. The thresholds below are editable screening settings, not official classifications."
+        )
+        chart_left, chart_right = st.columns([1.1, 1], gap="large")
+        with chart_left:
+            top5_plot = risk_summary.sort_values("Top-5 share (%)", ascending=True).copy()
+            top5_plot["Threshold status"] = np.where(top5_plot["Top-5 share (%)"] >= top5_flag_threshold, "At / above threshold", "Below threshold")
+            fig = px.bar(
+                top5_plot, x="Top-5 share (%)", y="Commodity", orientation="h",
+                color="Threshold status",
+                color_discrete_map={"At / above threshold": RED, "Below threshold": "#6E9F93"},
+                text="Top-5 share (%)",
+                labels={"Top-5 share (%)": "Top-5 share (%)", "Commodity": "Commodity group"},
+            )
+            fig.add_vline(x=top5_flag_threshold, line_dash="dash", line_color=NAVY, line_width=1.4)
+            fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside", cliponaxis=False, hovertemplate="%{y}<br>Top-5 share: %{x:.1f}%<extra></extra>")
+            fig.update_layout(xaxis_range=[0, min(110, max(100, float(top5_plot["Top-5 share (%)"].max()) + 12))], xaxis_title="Top-5 named-market share", yaxis_title="", legend_title_text="")
+            render_chart(fig, "risk_top5_share_by_commodity", 380)
+        with chart_right:
+            hhi_plot = risk_summary.sort_values("HHI", ascending=True).copy()
+            hhi_plot["Threshold status"] = np.where(hhi_plot["HHI"] >= hhi_flag_threshold, "At / above threshold", "Below threshold")
+            fig = px.bar(
+                hhi_plot, x="HHI", y="Commodity", orientation="h",
+                color="Threshold status",
+                color_discrete_map={"At / above threshold": RED, "Below threshold": "#365B78"},
+                text="HHI",
+                labels={"HHI": "HHI (0–10,000)", "Commodity": "Commodity group"},
+            )
+            fig.add_vline(x=hhi_flag_threshold, line_dash="dash", line_color=NAVY, line_width=1.4)
+            fig.update_traces(texttemplate="%{text:.0f}", textposition="outside", cliponaxis=False, hovertemplate="%{y}<br>HHI: %{x:.0f}<extra></extra>")
+            hhi_max_value = float(hhi_plot["HHI"].max()) if hhi_plot["HHI"].notna().any() else float(hhi_flag_threshold)
+            hhi_axis_max = min(10000, max(1000, max(hhi_max_value, float(hhi_flag_threshold)) * 1.15))
+            fig.update_layout(xaxis_range=[0, hhi_axis_max], xaxis_title="HHI (squared percentage shares)", yaxis_title="", legend_title_text="")
+            render_chart(fig, "risk_hhi_by_commodity", 380)
+
+        st.write("")
+        section(
+            "PARTNER DEPENDENCY MAP",
+            "Which named markets contribute to each commodity?",
+            "Each horizontal bar totals 100%. The five largest named markets across the selected scope are shown separately; the remaining named markets are combined as Other."
+        )
+        partner_commodity = (
+            risk_current_named.groupby(["Commodity", "DisplayCountry"], as_index=False)["Value_USD_Mn"]
+            .sum()
+        )
+        partner_commodity = partner_commodity[partner_commodity["Value_USD_Mn"] > 0].copy()
+        if not partner_commodity.empty:
+            top_global_markets = (
+                partner_commodity.groupby("DisplayCountry")["Value_USD_Mn"].sum()
+                .nlargest(5).index.tolist()
+            )
+            mix_rows = []
+            for commodity_name, group in partner_commodity.groupby("Commodity"):
+                total = float(group["Value_USD_Mn"].sum())
+                if total <= 0:
+                    continue
+                values = group.set_index("DisplayCountry")["Value_USD_Mn"]
+                assigned = 0.0
+                for market_name in top_global_markets:
+                    value = float(values.get(market_name, 0.0))
+                    assigned += value
+                    mix_rows.append({"Commodity": commodity_name, "Market segment": market_name, "Share (%)": value / total * 100})
+                other_value = max(0.0, total - assigned)
+                mix_rows.append({"Commodity": commodity_name, "Market segment": "Other named markets", "Share (%)": other_value / total * 100})
+            mix_df = pd.DataFrame(mix_rows)
+            mix_colors = {market: PALETTE[i % len(PALETTE)] for i, market in enumerate(top_global_markets)}
+            mix_colors["Other named markets"] = "#C8C9C3"
+            fig = px.bar(
+                mix_df, x="Share (%)", y="Commodity", color="Market segment", orientation="h", barmode="stack",
+                color_discrete_map=mix_colors,
+                category_orders={"Market segment": top_global_markets + ["Other named markets"]},
+                labels={"Commodity": "Commodity group", "Share (%)": "Share of commodity value (%)"},
+            )
+            fig.update_layout(xaxis_range=[0, 100], xaxis_ticksuffix="%", xaxis_title="Share of commodity value", yaxis_title="", legend_title_text="Named market")
+            fig.update_traces(hovertemplate="%{y}<br>%{fullData.name}: %{x:.1f}%<extra></extra>")
+            render_chart(fig, "risk_partner_mix_by_commodity", 410)
+        else:
+            st.info("Partner contribution chart is unavailable because no positive named-market values exist for the selected scope.")
+
+        st.write("")
+        section(
+            "RISK REGISTER",
+            "Inspect and export concentration signals",
+            "Top-1/3/5 shares are calculated from positive values for named markets only. HHI = sum of each market's percentage share squared."
+        )
+        show_risk = risk_summary.sort_values(["Screening signal", "HHI"], ascending=[True, False]).copy()
+        risk_display = show_risk[[
+            "Commodity", "Total value (US$ B) in scope", "Named markets", "Largest market",
+            "Top-1 share (%)", "Top-3 share (%)", "Top-5 share (%)", "HHI",
+            "HHI change", "Top-5 share change (pp)", "YoY concentration movement", "Screening signal"
+        ]].rename(columns={
+            "Total value (US$ B) in scope": "Recorded value (US$ B)",
+            "HHI change": "HHI change vs prior",
+            "Top-5 share change (pp)": "Top-5 change (pp)",
+        })
+        st.dataframe(
+            risk_display,
+            use_container_width=True,
+            hide_index=True,
+            height=compact_height(len(risk_display), max_height=460),
+            column_config={
+                "Recorded value (US$ B)": st.column_config.NumberColumn(format="$%.3fB"),
+                "Top-1 share (%)": st.column_config.NumberColumn(format="%.1f%%"),
+                "Top-3 share (%)": st.column_config.NumberColumn(format="%.1f%%"),
+                "Top-5 share (%)": st.column_config.NumberColumn(format="%.1f%%"),
+                "HHI": st.column_config.NumberColumn(format="%.0f"),
+                "HHI change vs prior": st.column_config.NumberColumn(format="%+.0f"),
+                "Top-5 change (pp)": st.column_config.NumberColumn(format="%+.1f"),
+            },
+        )
+        st.download_button(
+            "Download concentration & risk register as CSV",
+            data=risk_display.to_csv(index=False).encode("utf-8"),
+            file_name=f"petrotrade_concentration_risk_{selected_year}.csv",
+            mime="text/csv",
+            type="primary",
+        )
+        if risk_flow == "Imports":
+            flow_interpretation = "Because the selected flow is Imports, concentration can be interpreted as a descriptive signal of supplier-market exposure in this dataset. It does not by itself measure disruption probability or supplier substitutability."
+        elif risk_flow == "Exports":
+            flow_interpretation = "Because the selected flow is Exports, concentration can be interpreted as a descriptive signal of destination-market exposure in this dataset. It does not by itself establish demand risk."
+        elif risk_flow == "Combined flows":
+            flow_interpretation = "The selected view combines imports and exports. Treat this as overall recorded-value concentration, not supplier dependency or export-destination dependency."
+        else:
+            flow_interpretation = "The direction of the selected flow is unverified. Results describe named-market concentration in recorded values only and should not be described as supplier or destination dependency."
+        st.markdown(
+            f"<div class='callout'><b>Interpretation guardrail:</b> {safe(flow_interpretation)} The top-5 and HHI thresholds are analyst-defined screening settings. They flag records for investigation; they do not prove that a commodity is risky.</div>",
+            unsafe_allow_html=True,
+        )
+
+# =============================================================================
+# PAGE 5: IMPORTS VS EXPORTS
 # =============================================================================
 elif page == "Imports vs exports":
     section("TRADE-FLOW COMPARISON", "See imports, exports and net trade position", "This page requires flow-specific datasets. The app does not infer import/export direction from the value columns.")
