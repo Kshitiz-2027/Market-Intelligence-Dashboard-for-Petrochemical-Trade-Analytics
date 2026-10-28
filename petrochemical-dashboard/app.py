@@ -461,14 +461,15 @@ if not st.session_state["petrotrade_workspace_entered"]:
                 unsafe_allow_html=True,
             )
 
-    st.markdown("<div class='landing-section-title'>One workspace, four analytical lenses</div>", unsafe_allow_html=True)
+    st.markdown("<div class='landing-section-title'>One workspace, five analytical lenses</div>", unsafe_allow_html=True)
     st.markdown("<div class='landing-section-copy'>The preview introduces the areas available after you enter the dashboard. Every view is driven by the selected records, rather than static example numbers.</div>", unsafe_allow_html=True)
-    feature_cols = st.columns(4, gap="medium")
+    feature_cols = st.columns(5, gap="small")
     feature_items = [
-        ("◈", "Market overview", "Track headline recorded value, year-on-year movement, monthly peaks and commodity contribution."),
-        ("▥", "Commodity intelligence", "Compare HS chapters, inspect month-by-month patterns and identify categories gaining or losing value."),
-        ("◎", "Partner markets", "Rank named partners, inspect a selected country and understand how value is distributed across markets."),
-        ("⇄", "Trade-flow analysis", "Compare imports, exports and trade balance when both direction-verified datasets are available."),
+        ("◈", "Market overview", "Track recorded value, year-on-year movement, monthly peaks and commodity contribution."),
+        ("▥", "Commodity intelligence", "Compare HS chapters and inspect monthly patterns across categories."),
+        ("◎", "Partner markets", "Rank named partners and inspect country-level trends."),
+        ("⌖", "Opportunity matrix", "Screen commodity groups or markets by recorded value and comparable-period growth."),
+        ("⇄", "Trade-flow analysis", "Compare imports, exports and balance when both directions are verified."),
     ]
     for col, (icon, title, copy) in zip(feature_cols, feature_items):
         with col:
@@ -671,7 +672,7 @@ with st.container(border=True):
             index=1,
             key="workspace_top_markets_main",
         )
-    st.caption("Changes apply to every page immediately. Use the top navigation below to switch between the overview, commodity breakdown, trade flows, partner markets, and data explorer.")
+    st.caption("Changes apply to every page immediately. Use the top navigation below to switch between the overview, commodity breakdown, market opportunity matrix, trade flows, partner markets, and data explorer.")
 
 if not selected_categories:
     st.warning("Select at least one commodity family in the live controls to continue.")
@@ -742,7 +743,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-pages = ["Overview", "Commodity breakdown", "Imports vs exports", "Partner markets", "Data & methodology"]
+pages = ["Overview", "Commodity breakdown", "Market opportunity matrix", "Imports vs exports", "Partner markets", "Data & methodology"]
 page = st.radio(
     "Main navigation",
     pages,
@@ -1014,7 +1015,312 @@ elif page == "Commodity breakdown":
         st.dataframe(pd.DataFrame(explanations), use_container_width=True, hide_index=True)
 
 # =============================================================================
-# PAGE 3: IMPORTS VS EXPORTS
+# PAGE 3: MARKET OPPORTUNITY MATRIX
+# =============================================================================
+elif page == "Market opportunity matrix":
+    section(
+        "MARKET OPPORTUNITY MATRIX",
+        "Where should an analyst look first?",
+        "Compare current recorded value with year-on-year change to screen commodity groups or partner markets for further investigation."
+    )
+    st.markdown(
+        "<div class='info-panel'><b>How to read the matrix:</b> each point is a commodity group or a named partner. The horizontal position shows current-period recorded value; the vertical position shows change against the same months in the previous year. The vertical divider is the median value in this selection, and the horizontal divider is your chosen growth threshold. Quadrants are relative screening labels, not investment recommendations or forecasts.</div>",
+        unsafe_allow_html=True,
+    )
+
+    lens_col, flow_col, growth_col = st.columns([1.15, 1.0, 1.2], gap="medium")
+    with lens_col:
+        matrix_lens = st.radio(
+            "Analyze",
+            ["Commodity groups", "Partner markets"],
+            horizontal=True,
+            key="opportunity_matrix_lens",
+            help="Choose whether each point represents an HS commodity group or a named trading partner.",
+        )
+    matrix_flow_options = []
+    if has_both_flows:
+        matrix_flow_options.append("Combined flows")
+    matrix_flow_options.extend(available_flows)
+    if not matrix_flow_options:
+        matrix_flow_options = ["Direction not verified"]
+    with flow_col:
+        matrix_flow = st.selectbox(
+            "Trade flow to analyze",
+            matrix_flow_options,
+            index=0,
+            key="opportunity_matrix_flow",
+            help="When both Imports and Exports are loaded, inspect them separately or choose Combined flows. Unknown direction is never inferred.",
+        )
+    with growth_col:
+        growth_threshold = st.slider(
+            "Growth threshold (%)",
+            min_value=-50,
+            max_value=200,
+            value=0,
+            step=5,
+            key="opportunity_growth_threshold",
+            help="The horizontal divider. Above-threshold means growth is at or above this selected percentage.",
+        )
+
+    coverage = "All named markets"
+    if matrix_lens == "Partner markets":
+        cov_col, label_col = st.columns([1.2, 1], gap="medium")
+        with cov_col:
+            coverage = st.selectbox(
+                "Partner coverage",
+                ["All named markets", f"Top {top_partner_count} by current value"],
+                index=0,
+                key="opportunity_partner_coverage",
+                help="All named markets helps reveal smaller but fast-growing markets. Top N simplifies the display to the largest current values.",
+            )
+        with label_col:
+            label_points = st.checkbox(
+                "Label points on chart",
+                value=False,
+                key="opportunity_label_points",
+                help="For partner markets, labels are limited to a small set to avoid chart clutter. Hover over any point for the full details.",
+            )
+    else:
+        label_points = st.checkbox(
+            "Label points on chart",
+            value=True,
+            key="opportunity_label_points_commodities",
+            help="Commodity labels are short enough to show directly on the chart.",
+        )
+
+    matrix_current = current.copy()
+    matrix_prior = prior.copy()
+    if matrix_flow != "Combined flows":
+        matrix_current = matrix_current[matrix_current["Trade Flow"] == matrix_flow].copy()
+        matrix_prior = matrix_prior[matrix_prior["Trade Flow"] == matrix_flow].copy()
+
+    if matrix_lens == "Commodity groups":
+        cur_entities = (
+            matrix_current.groupby(["Commodity", "Commodity Category"], as_index=False)["Value_USD_Mn"]
+            .sum()
+            .rename(columns={"Commodity": "Entity", "Value_USD_Mn": "Current_Mn"})
+        )
+        prior_entities = (
+            matrix_prior.groupby(["Commodity"], as_index=False)["Value_USD_Mn"]
+            .sum()
+            .rename(columns={"Commodity": "Entity", "Value_USD_Mn": "Prior_Mn"})
+        )
+        entity_type_label = "commodity groups"
+    else:
+        cur_named = named_rows(matrix_current)
+        prior_named = named_rows(matrix_prior)
+        cur_entities = (
+            cur_named.groupby("DisplayCountry", as_index=False)["Value_USD_Mn"]
+            .sum()
+            .rename(columns={"DisplayCountry": "Entity", "Value_USD_Mn": "Current_Mn"})
+        )
+        prior_entities = (
+            prior_named.groupby("DisplayCountry", as_index=False)["Value_USD_Mn"]
+            .sum()
+            .rename(columns={"DisplayCountry": "Entity", "Value_USD_Mn": "Prior_Mn"})
+        )
+        entity_type_label = "named partner markets"
+
+    matrix_df = cur_entities.merge(prior_entities, on="Entity", how="left")
+    if "Prior_Mn" not in matrix_df.columns:
+        matrix_df["Prior_Mn"] = np.nan
+    matrix_df["Prior_Mn"] = pd.to_numeric(matrix_df["Prior_Mn"], errors="coerce")
+    matrix_df["Current_Mn"] = pd.to_numeric(matrix_df["Current_Mn"], errors="coerce").fillna(0)
+    matrix_df["Current_USD_Bn"] = matrix_df["Current_Mn"] / 1000
+    matrix_df["Prior_USD_Bn"] = matrix_df["Prior_Mn"] / 1000
+    matrix_df["YoY change (%)"] = np.where(
+        matrix_df["Prior_Mn"] > 0,
+        (matrix_df["Current_Mn"] / matrix_df["Prior_Mn"] - 1) * 100,
+        np.nan,
+    )
+
+    # Optional top-N view is applied after the partner aggregates are created.
+    if matrix_lens == "Partner markets" and coverage.startswith("Top "):
+        matrix_limit = int(re.search(r"Top (\d+)", coverage).group(1))
+        matrix_df = matrix_df.nlargest(matrix_limit, "Current_Mn").copy()
+
+    # Growth is not meaningful when the comparable prior-period denominator is zero or missing.
+    assessed = matrix_df[matrix_df["Prior_Mn"].gt(0) & matrix_df["YoY change (%)"].notna()].copy()
+    unassessed_count = int(len(matrix_df) - len(assessed))
+
+    if assessed.empty:
+        st.warning(
+            f"There is no positive comparable prior-year baseline for these {entity_type_label} in {selected_year}. "
+            "Choose a year with prior-year data or broaden the current filters to build the opportunity matrix."
+        )
+        current_rank = matrix_df.sort_values("Current_Mn", ascending=False).head(15).copy()
+        if not current_rank.empty:
+            current_rank["Recorded value (US$ B)"] = current_rank["Current_USD_Bn"]
+            st.dataframe(
+                current_rank[["Entity", "Recorded value (US$ B)"]],
+                use_container_width=True,
+                hide_index=True,
+                column_config={"Recorded value (US$ B)": st.column_config.NumberColumn(format="$%.3fB")},
+            )
+    else:
+        value_threshold = float(assessed["Current_USD_Bn"].median())
+        assessed["Value segment"] = np.where(
+            assessed["Current_USD_Bn"] >= value_threshold,
+            "Higher value",
+            "Lower value",
+        )
+        assessed["Growth segment"] = np.where(
+            assessed["YoY change (%)"] >= growth_threshold,
+            "Above threshold",
+            "Below threshold",
+        )
+        assessed["Quadrant"] = assessed.apply(
+            lambda row: f"{row['Value segment']} · {row['Growth segment']}", axis=1
+        )
+        quadrant_colors = {
+            "Higher value · Above threshold": "#23745B",
+            "Higher value · Below threshold": "#365B78",
+            "Lower value · Above threshold": "#E46F4A",
+            "Lower value · Below threshold": "#83919B",
+        }
+
+        priority_entities = assessed[
+            (assessed["Current_USD_Bn"] >= value_threshold)
+            & (assessed["YoY change (%)"] >= growth_threshold)
+        ].copy()
+        value_leader = assessed.loc[assessed["Current_USD_Bn"].idxmax()]
+        growth_leader = assessed.loc[assessed["YoY change (%)"].idxmax()]
+
+        k1, k2, k3, k4 = st.columns(4, gap="medium")
+        with k1:
+            kpi_card("ENTITIES ASSESSED", f"{len(assessed):,}", f"Comparable {selected_year} vs {prior_year}", TEAL)
+        with k2:
+            kpi_card("HIGHER VALUE + ABOVE THRESHOLD", f"{len(priority_entities):,}", f"Growth ≥ {growth_threshold:.0f}% and value ≥ median", GREEN)
+        with k3:
+            kpi_card("VALUE LEADER", str(value_leader["Entity"]), fmt_money_mn(value_leader["Current_Mn"]), "#365B78")
+        with k4:
+            kpi_card("FASTEST COMPARABLE GROWTH", fmt_pct(growth_leader["YoY change (%)"]), str(growth_leader["Entity"]), "#E0B15A")
+
+        st.write("")
+        chart_left, chart_right = st.columns([1.55, 1], gap="large")
+        with chart_left:
+            section(
+                "OPPORTUNITY SCATTER",
+                "Value versus year-on-year change",
+                f"Vertical line = median value ({fmt_money_bn(value_threshold)}); horizontal line = selected growth threshold ({growth_threshold:.0f}%). Bubble size reflects current-period recorded value."
+            )
+            plot_df = assessed.copy()
+            # Keep this column present for Plotly's hover schema even when labels are off.
+            plot_df["Plot label"] = ""
+            # To keep the partner view readable, label only the 12 largest entities if requested.
+            if label_points and matrix_lens == "Partner markets":
+                label_entities = set(plot_df.nlargest(12, "Current_Mn")["Entity"].tolist())
+                plot_df["Plot label"] = plot_df["Entity"].where(plot_df["Entity"].isin(label_entities), "")
+                text_arg = "Plot label"
+            elif label_points:
+                plot_df["Plot label"] = plot_df["Entity"]
+                text_arg = "Plot label"
+            else:
+                text_arg = None
+
+            fig = px.scatter(
+                plot_df,
+                x="Current_USD_Bn",
+                y="YoY change (%)",
+                size="Current_USD_Bn",
+                color="Quadrant",
+                text=text_arg,
+                hover_name="Entity",
+                hover_data={
+                    "Current_USD_Bn": ":.3f",
+                    "Prior_USD_Bn": ":.3f",
+                    "YoY change (%)": ":+.1f",
+                    "Quadrant": True,
+                    "Current_Mn": False,
+                    "Prior_Mn": False,
+                    "Value segment": False,
+                    "Growth segment": False,
+                    "Plot label": False,
+                },
+                size_max=32 if matrix_lens == "Partner markets" else 48,
+                color_discrete_map=quadrant_colors,
+                labels={
+                    "Current_USD_Bn": "Current value (US$ billion)",
+                    "YoY change (%)": "YoY change (%)",
+                    "Quadrant": "Relative segment",
+                    "Prior_USD_Bn": "Comparable prior value (US$ billion)",
+                },
+            )
+            fig.add_vline(x=value_threshold, line_dash="dash", line_color="#68727D", line_width=1.5)
+            fig.add_hline(y=growth_threshold, line_dash="dash", line_color="#68727D", line_width=1.5)
+            fig.update_traces(marker=dict(opacity=0.83, line=dict(width=1, color="#FFFEFC")))
+            if text_arg:
+                fig.update_traces(textposition="top center", textfont=dict(size=10, color=NAVY))
+            fig.update_layout(
+                xaxis_title="Current-period value (US$ billion)",
+                yaxis_title="Year-on-year change (%)",
+                legend_title_text="Relative segment",
+                hovermode="closest",
+            )
+            fig.update_yaxes(ticksuffix="%", zeroline=True, zerolinecolor="#BFC8CE")
+            render_chart(fig, "market_opportunity_matrix_scatter", 500)
+
+        with chart_right:
+            section(
+                "HOW TO INTERPRET",
+                "Read the four quadrants",
+                "Quadrants are calculated relative to the selected entities, months, commodities and flow."
+            )
+            insight_card("01", "HIGHER VALUE · ABOVE THRESHOLD", "Large recorded value with growth at or above the selected threshold. These entities are worth prioritising for deeper review.")
+            st.write("")
+            insight_card("02", "HIGHER VALUE · BELOW THRESHOLD", "Large recorded value but growth below the selected threshold. Established markets may warrant monitoring.")
+            st.write("")
+            insight_card("03", "LOWER VALUE · ABOVE THRESHOLD", "Smaller recorded value with growth at or above the threshold. These can be emerging signals, but check the baseline and value size.")
+            st.write("")
+            insight_card("04", "LOWER VALUE · BELOW THRESHOLD", "Smaller value and growth below the threshold. Review selectively in light of the project or business context.")
+
+        st.write("")
+        high_growth_count = int((assessed["YoY change (%)"] >= growth_threshold).sum())
+        st.markdown(
+            f"<div class='callout'><b>Selected-scope readout:</b> {len(priority_entities)} of {len(assessed)} assessed {entity_type_label} sit in the higher-value / above-threshold quadrant. {high_growth_count} entities are at or above the {growth_threshold:.0f}% growth threshold. These are screening signals only; they do not establish causes or predict future results.</div>",
+            unsafe_allow_html=True,
+        )
+        if unassessed_count > 0:
+            st.caption(
+                f"{unassessed_count} additional entities were not plotted because the comparable prior-period value was zero or missing. Growth percentages are not defined for those records."
+            )
+
+        section(
+            "OPPORTUNITY TABLE",
+            "Inspect and export every point",
+            "Sort by current value or growth to investigate the strongest signals."
+        )
+        display_matrix = assessed.copy()
+        display_matrix = display_matrix.rename(columns={
+            "Entity": "Commodity / market",
+            "Current_USD_Bn": "Current value (US$ B)",
+            "Prior_USD_Bn": "Comparable prior value (US$ B)",
+        })
+        display_matrix = display_matrix[[
+            "Commodity / market", "Current value (US$ B)", "Comparable prior value (US$ B)",
+            "YoY change (%)", "Quadrant"
+        ]].sort_values(["Quadrant", "Current value (US$ B)"], ascending=[True, False])
+        st.dataframe(
+            display_matrix,
+            use_container_width=True,
+            hide_index=True,
+            height=compact_height(len(display_matrix), max_height=520),
+            column_config={
+                "Current value (US$ B)": st.column_config.NumberColumn(format="$%.3fB"),
+                "Comparable prior value (US$ B)": st.column_config.NumberColumn(format="$%.3fB"),
+                "YoY change (%)": st.column_config.NumberColumn(format="%+.1f%%"),
+            },
+        )
+        st.download_button(
+            "Download opportunity matrix as CSV",
+            data=display_matrix.to_csv(index=False).encode("utf-8"),
+            file_name=f"petrotrade_opportunity_matrix_{selected_year}.csv",
+            mime="text/csv",
+            type="primary",
+        )
+
+# =============================================================================
+# PAGE 4: IMPORTS VS EXPORTS
 # =============================================================================
 elif page == "Imports vs exports":
     section("TRADE-FLOW COMPARISON", "See imports, exports and net trade position", "This page requires flow-specific datasets. The app does not infer import/export direction from the value columns.")
@@ -1085,7 +1391,7 @@ elif page == "Imports vs exports":
             render_chart(fig, "flow_available_only", 350)
 
 # =============================================================================
-# PAGE 4: PARTNER MARKETS
+# PAGE 5: PARTNER MARKETS
 # =============================================================================
 elif page == "Partner markets":
     section("PARTNER EXPLORER", "Understand which markets drive recorded value", "Choose a partner to inspect its monthly trajectory, commodity mix, and year-on-year movement.")
@@ -1156,7 +1462,7 @@ elif page == "Partner markets":
                      column_config={"Selected period (US$ B)": st.column_config.NumberColumn(format="$%.2fB"), "Comparable prior (US$ B)": st.column_config.NumberColumn(format="$%.2fB"), "YoY change (%)": st.column_config.NumberColumn(format="%.1f%%")})
 
 # =============================================================================
-# PAGE 5: DATA & METHODOLOGY
+# PAGE 6: DATA & METHODOLOGY
 # =============================================================================
 else:
     section("DATA & METHODOLOGY", "Inspect, validate and export the underlying records", "Use this page to check the data behind the visuals and download a filtered extract for further analysis.")
@@ -1202,6 +1508,7 @@ else:
 - **Trade balance:** calculated as exports minus imports only when both datasets are loaded. Missing direction is never silently treated as zero.
 - **Partial year:** year-on-year comparison uses the months common to all loaded flows in the selected year and the same months from the prior year.
 - **Scope limitation:** these are broad HS chapters related to petroleum, chemicals, plastics and rubber. They are not an exact list of every petrochemical product.
+- **Market Opportunity Matrix:** current value is compared with same-month prior-year value. Entities with a positive prior-period denominator receive a year-on-year rate. The horizontal divider is user-selected; the vertical divider is the median current value within the assessed selection. Quadrants are relative screening labels, not recommendations.
 - **Interpretation:** trends and concentration measures describe this dataset; they do not establish the causes behind a change or forecast future values.
     """)
 
