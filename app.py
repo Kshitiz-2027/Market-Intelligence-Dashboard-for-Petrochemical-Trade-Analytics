@@ -463,12 +463,12 @@ if not st.session_state["petrotrade_workspace_entered"]:
                 unsafe_allow_html=True,
             )
 
-    st.markdown("<div class='landing-section-title'>One workspace, five analytical lenses</div>", unsafe_allow_html=True)
+    st.markdown("<div class='landing-section-title'>One workspace, connected analytical views</div>", unsafe_allow_html=True)
     st.markdown("<div class='landing-section-copy'>The preview introduces the areas available after you enter the dashboard. Every view is driven by the selected records, rather than static example numbers.</div>", unsafe_allow_html=True)
     feature_cols = st.columns(5, gap="small")
     feature_items = [
         ("◈", "Market overview", "Track recorded value, year-on-year movement, monthly peaks and commodity contribution."),
-        ("▥", "Commodity intelligence", "Compare HS chapters and inspect monthly patterns across categories."),
+        ("▥", "Commodity intelligence", "Compare HS chapters, inspect monthly patterns and open a focused commodity profile."),
         ("◎", "Partner markets", "Rank named partners and inspect country-level trends."),
         ("⌖", "Opportunity matrix", "Screen commodity groups or markets by recorded value and comparable-period growth."),
         ("⇄", "Trade-flow analysis", "Compare imports, exports and balance when both directions are verified."),
@@ -495,7 +495,7 @@ if not st.session_state["petrotrade_workspace_entered"]:
         st.markdown(
             "1. Enter the workspace to choose a reporting year and month window.\n"
             "2. Select the commodity families and HS chapters relevant to your question.\n"
-            "3. Explore the overview, commodity breakdown and partner-market pages.\n"
+            "3. Explore the overview, commodity breakdown, commodity deep dive, opportunity matrix, concentration analysis and partner-market pages.\n"
             "4. Export filtered records from Data & methodology for independent validation.\n\n"
             "**Important:** year-on-year comparisons use the same months in the previous year. A partial year is not comparable to a complete annual total."
         )
@@ -674,7 +674,7 @@ with st.container(border=True):
             index=1,
             key="workspace_top_markets_main",
         )
-    st.caption("Changes apply to every page immediately. Use the top navigation below to switch between the overview, commodity breakdown, market opportunity matrix, concentration and risk analysis, trade flows, partner markets, and data explorer.")
+    st.caption("Changes apply to every page immediately. Use the top navigation below to switch between the overview, commodity breakdown, commodity deep dive, market opportunity matrix, concentration and risk analysis, trade flows, partner markets, and data explorer.")
 
 if not selected_categories:
     st.warning("Select at least one commodity family in the live controls to continue.")
@@ -759,7 +759,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-pages = ["Overview", "Commodity breakdown", "Market opportunity matrix", "Concentration & risk", "Imports vs exports", "Partner markets", "Data & methodology"]
+pages = ["Overview", "Commodity breakdown", "Commodity deep dive", "Market opportunity matrix", "Concentration & risk", "Imports vs exports", "Partner markets", "Data & methodology"]
 page = st.radio(
     "Main navigation",
     pages,
@@ -777,7 +777,7 @@ if page == "Overview":
         "<div class='info-panel'><b>How to use PetroTrade:</b><br>"
         "<b>1. Use the live controls above</b> to choose year, months, commodity families, HS chapters, and partner market. All metrics and charts respond to these inputs.<br>"
         "<b>2. Read the signals</b> to see the largest commodity group, the leading named partner, and the strongest month in the selected period.<br>"
-        "<b>3. Explore a question</b> using Commodity breakdown, Imports vs exports, or Partner markets in the top navigation.<br>"
+        "<b>3. Explore a question</b> using Commodity breakdown, Commodity deep dive, Market opportunity matrix, Concentration & risk, or Partner markets in the top navigation.<br>"
         "<b>4. Export evidence</b> from Data & methodology for further analysis. Values are in US dollars; chart scales use billions for readability.</div>",
         unsafe_allow_html=True,
     )
@@ -1018,7 +1018,350 @@ elif page == "Commodity breakdown":
         st.dataframe(pd.DataFrame(explanations), use_container_width=True, hide_index=True)
 
 # =============================================================================
-# PAGE 3: MARKET OPPORTUNITY MATRIX
+# PAGE 3: COMMODITY DEEP DIVE
+# =============================================================================
+elif page == "Commodity deep dive":
+    section(
+        "COMMODITY DEEP DIVE",
+        "Understand one commodity from every angle",
+        "Select an HS chapter to inspect its value, comparable-period movement, monthly profile and named partner-market structure."
+    )
+    st.markdown(
+        "<div class='info-panel'><b>How to use this profile:</b> choose one commodity chapter, then optionally narrow the view to a trade flow or partner market. The annual chart uses the same selected months in each reporting year. Partner shares are calculated only across positive-value named markets.</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Commodity-specific controls. The global filters still define the available
+    # chapters and selected reporting months; these controls refine this page.
+    deep_control_cols = st.columns([1.35, 1.0, 1.25], gap="medium")
+    with deep_control_cols[0]:
+        deep_default_commodity = leader["Commodity"] if leader is not None and leader["Commodity"] in selected_commodities else selected_commodities[0]
+        if st.session_state.get("commodity_deep_dive_selected") not in selected_commodities:
+            st.session_state["commodity_deep_dive_selected"] = deep_default_commodity
+        deep_commodity = st.selectbox(
+            "Commodity to inspect",
+            selected_commodities,
+            index=selected_commodities.index(deep_default_commodity),
+            key="commodity_deep_dive_selected",
+            format_func=lambda name: f"HS {int(data.loc[data['Commodity'] == name, 'HS Code'].iloc[0])} · {name}",
+            help="Choose one of the HS chapters enabled in the live analysis controls.",
+        )
+    with deep_control_cols[1]:
+        deep_flow_options = ["All loaded flows"] + available_flows
+        if st.session_state.get("commodity_deep_dive_flow") not in deep_flow_options:
+            st.session_state["commodity_deep_dive_flow"] = "All loaded flows"
+        deep_flow = st.selectbox(
+            "Trade flow",
+            deep_flow_options,
+            index=0,
+            key="commodity_deep_dive_flow",
+            help="All loaded flows combines only the datasets currently connected. Direction is not inferred.",
+        )
+
+    deep_all_commodity = data[
+        (data["Commodity"] == deep_commodity)
+        & (data["MonthNum"].isin(months_present))
+    ].copy()
+    if deep_flow != "All loaded flows":
+        deep_all_commodity = deep_all_commodity[deep_all_commodity["Trade Flow"] == deep_flow].copy()
+
+    deep_current_all = deep_all_commodity[deep_all_commodity["Year"] == selected_year].copy()
+    deep_partner_totals_all = (
+        named_rows(deep_current_all)
+        .groupby("DisplayCountry", as_index=False)["Value_USD_Mn"]
+        .sum()
+        .sort_values("Value_USD_Mn", ascending=False)
+    )
+    deep_partner_options = ["All partner markets"] + deep_partner_totals_all.loc[
+        deep_partner_totals_all["Value_USD_Mn"] > 0, "DisplayCountry"
+    ].astype(str).tolist()
+    deep_default_partner = selected_market if selected_market in deep_partner_options else "All partner markets"
+    if st.session_state.get("commodity_deep_dive_partner") not in deep_partner_options:
+        st.session_state["commodity_deep_dive_partner"] = deep_default_partner
+    with deep_control_cols[2]:
+        deep_partner = st.selectbox(
+            "Partner market for this profile",
+            deep_partner_options,
+            index=deep_partner_options.index(deep_default_partner),
+            key="commodity_deep_dive_partner",
+            help="This page-level control can inspect one market or the full partner distribution for this commodity.",
+        )
+
+    deep_current = deep_current_all.copy()
+    deep_prior = deep_all_commodity[deep_all_commodity["Year"] == prior_year].copy()
+    if deep_partner != "All partner markets":
+        deep_current = deep_current[deep_current["DisplayCountry"] == deep_partner].copy()
+        deep_prior = deep_prior[deep_prior["DisplayCountry"] == deep_partner].copy()
+
+    if deep_current.empty:
+        st.info("No records are available for this commodity under the selected year, months and flow. Try another commodity or widen the reporting-period filters.")
+    else:
+        deep_value_mn = float(deep_current["Value_USD_Mn"].sum())
+        deep_prior_mn = float(deep_prior["Value_USD_Mn"].sum())
+        deep_yoy = (deep_value_mn / deep_prior_mn - 1) * 100 if deep_prior_mn > 0 else np.nan
+        # Keep the full commodity partner distribution available for context,
+        # even when the user drills into one market for the monthly profile.
+        deep_current_named_all = named_rows(deep_current_all)
+        deep_prior_all = deep_all_commodity[deep_all_commodity["Year"] == prior_year].copy()
+        deep_prior_named_all = named_rows(deep_prior_all)
+        deep_partner_summary = (
+            deep_current_named_all.groupby("DisplayCountry", as_index=False)["Value_USD_Mn"]
+            .sum()
+            .rename(columns={"Value_USD_Mn": "Current_Mn"})
+        )
+        deep_partner_prior = (
+            deep_prior_named_all.groupby("DisplayCountry", as_index=False)["Value_USD_Mn"]
+            .sum()
+            .rename(columns={"Value_USD_Mn": "Prior_Mn"})
+        )
+        deep_partner_summary = deep_partner_summary.merge(deep_partner_prior, on="DisplayCountry", how="left")
+        deep_partner_summary["Prior_Mn"] = deep_partner_summary["Prior_Mn"].fillna(0.0)
+        deep_named_total = float(deep_partner_summary["Current_Mn"].clip(lower=0).sum())
+        if deep_named_total > 0:
+            deep_partner_summary["Share (%)"] = deep_partner_summary["Current_Mn"].clip(lower=0) / deep_named_total * 100
+        else:
+            deep_partner_summary["Share (%)"] = np.nan
+        deep_partner_summary["YoY change (%)"] = np.where(
+            deep_partner_summary["Prior_Mn"] > 0,
+            (deep_partner_summary["Current_Mn"] / deep_partner_summary["Prior_Mn"] - 1) * 100,
+            np.nan,
+        )
+        deep_partner_summary = deep_partner_summary.sort_values("Current_Mn", ascending=False)
+        deep_active_markets = int((deep_partner_summary["Current_Mn"] > 0).sum())
+        deep_top_partner = deep_partner_summary.loc[deep_partner_summary["Current_Mn"] > 0].iloc[0] if (deep_partner_summary["Current_Mn"] > 0).any() else None
+        deep_top_partner_share = float(deep_top_partner["Share (%)"]) if deep_top_partner is not None and pd.notna(deep_top_partner["Share (%)"]) else np.nan
+
+        # Share within the currently selected commodity portfolio (same period,
+        # selected chapters, local flow and page-level partner scope).
+        deep_portfolio = data[
+            data["Commodity"].isin(selected_commodities)
+            & data["Commodity Category"].isin(selected_categories)
+            & (data["Year"] == selected_year)
+            & data["MonthNum"].isin(months_present)
+        ].copy()
+        if deep_flow != "All loaded flows":
+            deep_portfolio = deep_portfolio[deep_portfolio["Trade Flow"] == deep_flow].copy()
+        if deep_partner != "All partner markets":
+            deep_portfolio = deep_portfolio[deep_portfolio["DisplayCountry"] == deep_partner].copy()
+        deep_portfolio_total = float(deep_portfolio["Value_USD_Mn"].sum())
+        deep_portfolio_share = deep_value_mn / deep_portfolio_total * 100 if deep_portfolio_total > 0 else np.nan
+
+        commodity_meta = COMMODITY_INFO.get(int(deep_current["HS Code"].iloc[0]), {})
+        deep_hs_code = int(deep_current["HS Code"].iloc[0])
+        deep_category = str(deep_current["Commodity Category"].iloc[0])
+        deep_description = commodity_meta.get("description", str(deep_current["HS Description"].iloc[0]))
+        st.markdown(
+            f"<div class='callout'><b>HS {deep_hs_code} · {safe(deep_commodity)}</b> &nbsp;|&nbsp; {safe(deep_category)}<br>{safe(deep_description)}</div>",
+            unsafe_allow_html=True,
+        )
+        if deep_partner != "All partner markets":
+            st.caption(
+                f"Focused profile: {deep_partner}. The monthly and historical trend charts use this market; partner mix, rankings and concentration context continue to show the full named-market distribution for {deep_commodity}."
+            )
+
+        metric_cols = st.columns(4, gap="medium")
+        with metric_cols[0]:
+            kpi_card("RECORDED VALUE", fmt_money_bn(deep_value_mn / 1000), period_label, TEAL)
+        with metric_cols[1]:
+            kpi_card("YEAR-ON-YEAR CHANGE", fmt_pct(deep_yoy), f"Vs. same months in {prior_year}", GREEN if pd.notna(deep_yoy) and deep_yoy >= 0 else RED)
+        with metric_cols[2]:
+            kpi_card("NAMED PARTNER MARKETS", f"{deep_active_markets:,}", "Positive-value named markets in selected period", "#365B78")
+        with metric_cols[3]:
+            kpi_card("PORTFOLIO CONTRIBUTION", f"{deep_portfolio_share:.1f}%" if pd.notna(deep_portfolio_share) else "—", "Share of the currently selected commodity portfolio", "#E0B15A")
+
+        # Computed observations: descriptive only, not causal explanations.
+        signal_cols = st.columns(3, gap="medium")
+        with signal_cols[0]:
+            if deep_top_partner is not None:
+                signal_text = f"{deep_top_partner['DisplayCountry']} is the largest named market at {fmt_money_mn(deep_top_partner['Current_Mn'])}, representing {deep_top_partner_share:.1f}% of named-market value." if pd.notna(deep_top_partner_share) else f"{deep_top_partner['DisplayCountry']} is the largest named market by recorded value."
+            else:
+                signal_text = "No positive named-market values are available for this selection."
+            insight_card("01", "LEADING PARTNER", signal_text)
+        with signal_cols[1]:
+            deep_monthly = deep_current.groupby(["MonthNum", "Month"], as_index=False)["Value_USD_Mn"].sum().sort_values("MonthNum")
+            if not deep_monthly.empty:
+                peak_month = deep_monthly.loc[deep_monthly["Value_USD_Mn"].idxmax()]
+                insight_card("02", "STRONGEST SELECTED MONTH", f"{peak_month['Month']} has the highest recorded value in the selected months ({fmt_money_mn(peak_month['Value_USD_Mn'])}).")
+            else:
+                insight_card("02", "MONTHLY PROFILE", "Monthly observations are unavailable for this selection.")
+        with signal_cols[2]:
+            if pd.notna(deep_yoy):
+                movement_label = "increased" if deep_yoy > 0 else "decreased" if deep_yoy < 0 else "was unchanged"
+                insight_card("03", "COMPARABLE-PERIOD MOVEMENT", f"Recorded value {movement_label} by {abs(deep_yoy):.1f}% against the same selected months in {prior_year}.")
+            else:
+                insight_card("03", "COMPARABLE-PERIOD MOVEMENT", f"A percentage comparison is unavailable because {prior_year} has no positive baseline for this selection.")
+
+        st.write("")
+        section(
+            "MONTHLY PERFORMANCE",
+            "How did the commodity move month by month?",
+            f"The chart compares {selected_year} with the same selected months in {prior_year}. Change the global month selection to focus on a different period."
+        )
+        monthly_current = deep_current.groupby(["MonthNum", "Month"], as_index=False)["Value_USD_Bn"].sum()
+        monthly_current["Period"] = str(selected_year)
+        monthly_frames = [monthly_current]
+        if not deep_prior.empty:
+            monthly_prior = deep_prior.groupby(["MonthNum", "Month"], as_index=False)["Value_USD_Bn"].sum()
+            monthly_prior["Period"] = str(prior_year) + " · comparable"
+            monthly_frames.insert(0, monthly_prior)
+        monthly_compare = pd.concat(monthly_frames, ignore_index=True)
+        monthly_compare["Month"] = pd.Categorical(monthly_compare["Month"], categories=month_labels, ordered=True)
+        left, right = st.columns([1.25, 1], gap="large")
+        with left:
+            if selected_trend_style == "Area":
+                fig = px.area(monthly_compare, x="Month", y="Value_USD_Bn", color="Period", markers=True,
+                              category_orders={"Month": month_labels}, color_discrete_sequence=["#B7C1CA", TEAL],
+                              labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
+            elif selected_trend_style == "Grouped bars":
+                fig = px.bar(monthly_compare, x="Month", y="Value_USD_Bn", color="Period", barmode="group",
+                             category_orders={"Month": month_labels}, color_discrete_sequence=["#B7C1CA", TEAL],
+                             labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
+            else:
+                fig = px.line(monthly_compare, x="Month", y="Value_USD_Bn", color="Period", markers=True,
+                              category_orders={"Month": month_labels}, color_discrete_sequence=["#B7C1CA", TEAL],
+                              labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
+                fig.update_traces(line_width=3, marker_size=7)
+            fig.update_layout(hovermode="x unified", legend_title_text="", xaxis_title="Month", yaxis_title="Value (US$ billion)")
+            render_chart(fig, "deep_dive_monthly_trend", 390)
+        with right:
+            if not deep_partner_summary.empty and deep_partner_summary["Current_Mn"].clip(lower=0).sum() > 0:
+                pie_data = deep_partner_summary.head(5).copy()
+                other_val = max(0.0, deep_named_total - float(pie_data["Current_Mn"].clip(lower=0).sum()))
+                pie_data = pie_data[["DisplayCountry", "Current_Mn"]].rename(columns={"DisplayCountry": "Market", "Current_Mn": "Value_USD_Bn"})
+                pie_data["Value_USD_Bn"] = pie_data["Value_USD_Bn"] / 1000
+                if other_val > 0:
+                    pie_data = pd.concat([pie_data, pd.DataFrame([{"Market": "Other named markets", "Value_USD_Bn": other_val / 1000}])], ignore_index=True)
+                fig = px.pie(pie_data, names="Market", values="Value_USD_Bn", hole=.66,
+                             color_discrete_sequence=PALETTE,
+                             labels={"Value_USD_Bn": "Value (US$ billion)"})
+                fig.update_traces(textposition="inside", textinfo="percent", hovertemplate="%{label}<br>US$%{value:.3f}B<br>%{percent}<extra></extra>")
+                fig.add_annotation(text=f"US${deep_named_total/1000:.2f}B<br><sup>named markets</sup>", x=.5, y=.5, showarrow=False,
+                                   font=dict(size=15, color=NAVY))
+                fig.update_layout(showlegend=True, legend_title_text="Partner market")
+                render_chart(fig, "deep_dive_partner_mix", 390)
+            else:
+                st.info("Partner composition is unavailable because this selection has no positive named-market values.")
+
+        st.write("")
+        section(
+            "HISTORICAL CONTEXT",
+            "How does this commodity compare across reporting years?",
+            f"Each year uses the same selected month set ({', '.join(month_labels)}). Values are not annualized; years with incomplete source coverage should be interpreted with their observed month counts."
+        )
+        historical = data[
+            (data["Commodity"] == deep_commodity)
+            & (data["MonthNum"].isin(months_present))
+        ].copy()
+        if deep_flow != "All loaded flows":
+            historical = historical[historical["Trade Flow"] == deep_flow].copy()
+        if deep_partner != "All partner markets":
+            historical = historical[historical["DisplayCountry"] == deep_partner].copy()
+        annual_history = historical.groupby("Year", as_index=False).agg(
+            Value_USD_Bn=("Value_USD_Bn", "sum"),
+            Months_available=("MonthNum", "nunique"),
+        ).sort_values("Year")
+        if not annual_history.empty:
+            annual_history["Period"] = annual_history.apply(
+                lambda row: f"{int(row['Year'])}" + (" · selected" if int(row["Year"]) == selected_year else ""), axis=1
+            )
+            annual_history["Coverage"] = annual_history["Months_available"].astype(int).astype(str) + " months"
+            fig = px.bar(
+                annual_history, x="Year", y="Value_USD_Bn", color="Year",
+                color_continuous_scale=["#E7C5B8", TEAL, NAVY],
+                hover_data={"Months_available": True, "Coverage": True, "Value_USD_Bn": ":.3f"},
+                labels={"Value_USD_Bn": "Recorded value (US$ billion)", "Year": "Reporting year", "Months_available": "Months present"},
+            )
+            fig.update_layout(coloraxis_showscale=False, xaxis_title="Reporting year", yaxis_title="Value (US$ billion)")
+            render_chart(fig, "deep_dive_annual_history", 360, legend=False)
+        else:
+            st.info("Historical records are not available for this commodity and selection.")
+
+        st.write("")
+        section(
+            "PARTNER MARKET PERFORMANCE",
+            "Which markets lead, and which are gaining value?",
+            "The ranking uses current-period recorded value. Growth is shown only where the comparable prior-period partner value is positive."
+        )
+        partner_chart_left, partner_chart_right = st.columns([1.1, 1], gap="large")
+        partner_plot = deep_partner_summary[deep_partner_summary["Current_Mn"] > 0].head(top_partner_count).copy()
+        with partner_chart_left:
+            if not partner_plot.empty:
+                partner_plot = partner_plot.sort_values("Current_Mn", ascending=True)
+                partner_plot["Current_USD_Bn"] = partner_plot["Current_Mn"] / 1000
+                fig = px.bar(
+                    partner_plot, x="Current_USD_Bn", y="DisplayCountry", orientation="h",
+                    color="Current_USD_Bn", color_continuous_scale=["#E7C5B8", TEAL, NAVY],
+                    labels={"Current_USD_Bn": "Recorded value (US$ billion)", "DisplayCountry": "Named partner market"},
+                )
+                fig.update_layout(coloraxis_showscale=False, xaxis_title="Value (US$ billion)", yaxis_title="")
+                fig.update_traces(hovertemplate="%{y}<br>US$%{x:.3f}B<extra></extra>")
+                render_chart(fig, "deep_dive_partner_ranking", 390, legend=False)
+            else:
+                st.info("No positive named partner values are available for the selected scope.")
+        with partner_chart_right:
+            deep_growth = deep_partner_summary[
+                (deep_partner_summary["Current_Mn"] > 0) & (deep_partner_summary["Prior_Mn"] > 0)
+            ].nlargest(top_partner_count, "Current_Mn").copy()
+            if not deep_growth.empty:
+                deep_growth["Current_USD_Bn"] = deep_growth["Current_Mn"] / 1000
+                deep_growth["YoY change (%)"] = deep_growth["YoY change (%)"].astype(float)
+                fig = px.scatter(
+                    deep_growth, x="Current_USD_Bn", y="YoY change (%)", size="Current_USD_Bn",
+                    color="YoY change (%)", hover_name="DisplayCountry", size_max=34,
+                    color_continuous_scale=[RED, "#E8E4DB", GREEN],
+                    labels={"Current_USD_Bn": "Current value (US$ billion)", "YoY change (%)": "YoY change (%)"},
+                )
+                fig.add_hline(y=0, line_dash="dash", line_color=SLATE)
+                fig.update_layout(coloraxis_colorbar_title="YoY %", xaxis_title="Current value (US$ billion)", yaxis_title="YoY change (%)")
+                render_chart(fig, "deep_dive_partner_momentum", 390)
+            else:
+                st.info("Partner-level growth cannot be calculated for this selection because comparable positive prior-year values are unavailable.")
+
+        st.write("")
+        section(
+            "PARTNER LEDGER",
+            "Inspect the commodity's named markets",
+            "Downloadable country-level summary for the selected reporting period and the comparable prior period."
+        )
+        deep_table = deep_partner_summary.copy()
+        deep_table["Current value (US$ B)"] = deep_table["Current_Mn"] / 1000
+        deep_table["Comparable prior value (US$ B)"] = deep_table["Prior_Mn"] / 1000
+        deep_table = deep_table.rename(columns={
+            "DisplayCountry": "Partner market",
+            "Share (%)": "Share of named-market value (%)",
+        })
+        deep_table = deep_table[[
+            "Partner market", "Current value (US$ B)", "Comparable prior value (US$ B)",
+            "Share of named-market value (%)", "YoY change (%)"
+        ]].sort_values("Current value (US$ B) ", ascending=False)
+        st.dataframe(
+            deep_table,
+            use_container_width=True,
+            hide_index=True,
+            height=compact_height(len(deep_table), max_height=420),
+            column_config={
+                "Current value (US$ B) ": st.column_config.NumberColumn(format="$%.3fB"),
+                "Comparable prior value (US$ B)": st.column_config.NumberColumn(format="$%.3fB"),
+                "Share of named-market value (%)": st.column_config.NumberColumn(format="%.1f%%"),
+                "YoY change (%)": st.column_config.NumberColumn(format="%+.1f%%"),
+            },
+        )
+        deep_export = deep_table.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download commodity partner profile as CSV",
+            data=deep_export,
+            file_name=f"petrotrade_HS{deep_hs_code}_partner_profile_{selected_year}.csv",
+            mime="text/csv",
+            type="primary",
+        )
+
+    with st.expander("Commodity profile methodology and limitations", expanded=False):
+        st.write(
+            "The selected HS chapter is a broad product group. The profile aggregates the selected month's USD million values across the selected trade flow and partner scope. Year-on-year growth compares the same selected months in the previous year and is shown only when the previous-period value is positive. Partner shares and rankings exclude aggregate or unspecified country labels. The annual history chart uses the same selected months for each year and shows the count of months available. These outputs describe the supplied data; they do not identify causes or forecast future trade."
+        )
+
+# =============================================================================
+# PAGE 4: MARKET OPPORTUNITY MATRIX
 # =============================================================================
 elif page == "Market opportunity matrix":
     section(
@@ -1323,7 +1666,7 @@ elif page == "Market opportunity matrix":
         )
 
 # =============================================================================
-# PAGE 4: MARKET CONCENTRATION & RISK ANALYSIS
+# PAGE 5: MARKET CONCENTRATION & RISK ANALYSIS
 # =============================================================================
 elif page == "Concentration & risk":
     section(
@@ -1651,7 +1994,7 @@ elif page == "Concentration & risk":
             )
 
 # =============================================================================
-# PAGE 5: IMPORTS VS EXPORTS
+# PAGE 6: IMPORTS VS EXPORTS
 # =============================================================================
 elif page == "Imports vs exports":
     section("TRADE-FLOW COMPARISON", "See imports, exports and net trade position", "This page requires flow-specific datasets. The app does not infer import/export direction from the value columns.")
@@ -1722,7 +2065,7 @@ elif page == "Imports vs exports":
             render_chart(fig, "flow_available_only", 350)
 
 # =============================================================================
-# PAGE 5: PARTNER MARKETS
+# PAGE 7: PARTNER MARKETS
 # =============================================================================
 elif page == "Partner markets":
     section("PARTNER EXPLORER", "Understand which markets drive recorded value", "Choose a partner to inspect its monthly trajectory, commodity mix, and year-on-year movement.")
@@ -1793,7 +2136,7 @@ elif page == "Partner markets":
                      column_config={"Selected period (US$ B)": st.column_config.NumberColumn(format="$%.2fB"), "Comparable prior (US$ B)": st.column_config.NumberColumn(format="$%.2fB"), "YoY change (%)": st.column_config.NumberColumn(format="%.1f%%")})
 
 # =============================================================================
-# PAGE 6: DATA & METHODOLOGY
+# PAGE 8: DATA & METHODOLOGY
 # =============================================================================
 else:
     section("DATA & METHODOLOGY", "Inspect, validate and export the underlying records", "Use this page to check the data behind the visuals and download a filtered extract for further analysis.")
