@@ -143,13 +143,22 @@ footer { visibility: hidden; }
 .hero .hero-sub { max-width: 940px; color: #E0E7E9; font-size: .98rem; line-height: 1.65; }
 .hero-meta { display: flex; gap: .55rem; flex-wrap: wrap; margin-top: 1.15rem; }
 .hero-chip { display: inline-block; border: 1px solid rgba(255,255,255,.20); color: #F5F3EE; background: rgba(255,255,255,.075); padding: .35rem .68rem; border-radius: 6px; font-size: .73rem; }
-/* Top navigation */
-div[data-testid="stRadio"] { margin: .2rem 0 .9rem; }
-div[data-testid="stRadio"] [role="radiogroup"] { display:flex; flex-direction:row; flex-wrap:wrap; gap:.5rem; padding:.35rem 0 .8rem; border-bottom:1px solid #DED9CF; }
-div[data-testid="stRadio"] [role="radiogroup"] label { background:#FFFEFC; border:1px solid #DED9CF; border-radius:8px; padding:.54rem .9rem; margin:0; color:#53616D; font-weight:650; transition:transform .18s ease, border-color .18s ease, background .18s ease; }
-div[data-testid="stRadio"] [role="radiogroup"] label:hover { transform:translateY(-2px); border-color:#E46F4A; }
-div[data-testid="stRadio"] input[type="radio"] { accent-color:#E46F4A; }
-div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) { background:#FBE8DF; border-color:#E46F4A; color:#A94328; }
+/* Main application navigation bar */
+.navbar-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:.25rem 0 .45rem; }
+.navbar-kicker { color:#A35A43; text-transform:uppercase; letter-spacing:.16em; font-size:.66rem; font-weight:850; }
+.navbar-hint { color:#7B858D; font-size:.73rem; }
+div[data-testid="stButton"] > button {
+  min-height:2.65rem; white-space:normal; line-height:1.12; padding:.48rem .42rem;
+  border-radius:9px; border:1px solid #DED9CF; background:#FFFEFC; color:#53616D;
+  font-size:.78rem; font-weight:700; transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
+}
+div[data-testid="stButton"] > button:hover { transform:translateY(-2px); border-color:#E46F4A; color:#A94328; box-shadow:0 5px 14px rgba(23,42,58,.07); }
+div[data-testid="stButton"] > button[kind="primary"] { background:#FBE8DF !important; border:1px solid #E46F4A !important; color:#A94328 !important; box-shadow:inset 0 0 0 1px rgba(228,111,74,.08); }
+div[data-testid="stButton"] > button[kind="primary"]:hover { background:#F7DCCF !important; border-color:#C95C3B !important; }
+.navbar-divider { height:1px; background:#DED9CF; margin:.6rem 0 .95rem; }
+@media (max-width: 1050px) {
+  div[data-testid="stButton"] > button { font-size:.70rem; padding:.42rem .25rem; min-height:2.8rem; }
+}
 /* Inputs and selections */
 [data-baseweb="select"] > div { border-color:#DED9CF !important; border-radius:8px !important; }
 [data-baseweb="tag"] { background:#E46F4A !important; border-radius:5px !important; }
@@ -502,19 +511,13 @@ if not st.session_state["petrotrade_workspace_entered"]:
 
     if enter_clicked or method_clicked:
         st.session_state["petrotrade_workspace_entered"] = True
-        st.session_state["main_navigation"] = "Data & methodology" if method_clicked else "Overview"
+        landing_target = "Data & methodology" if method_clicked else "Overview"
+        st.session_state["petrotrade_active_page"] = landing_target
         st.rerun()
 
     if preview_error:
         st.caption(f"Preview metrics could not be calculated from the source file: {preview_error}")
     st.stop()
-
-# Small return path so users can revisit the landing / preview page.
-back_col, _ = st.columns([1.4, 8], gap="small")
-with back_col:
-    if st.button("← Welcome / preview", key="petrotrade_back_to_landing"):
-        st.session_state["petrotrade_workspace_entered"] = False
-        st.rerun()
 
 # =============================================================================
 # Main-canvas intro + data-source setup
@@ -526,6 +529,52 @@ st.markdown(
     "<div class='hero-meta'><span class='hero-chip'>Interactive analysis workspace</span><span class='hero-chip'>HS chapters 27 · 28 · 29 · 39 · 40</span><span class='hero-chip'>Monthly trade records</span></div></div>",
     unsafe_allow_html=True,
 )
+
+# =============================================================================
+# Unified top navigation: every user-facing workspace feature is reachable here.
+# =============================================================================
+NAV_ITEMS = [
+    ("Welcome", "⌂ Welcome", "Return to the PetroTrade introduction and preview"),
+    ("Overview", "◈ Overview", "Executive market overview and headline KPIs"),
+    ("Commodity breakdown", "▤ Commodities", "Compare HS chapters and commodity categories"),
+    ("Commodity deep dive", "⌕ Deep dive", "Inspect one commodity in detail"),
+    ("Market opportunity matrix", "⌖ Opportunity", "Screen value against comparable-period growth"),
+    ("Concentration & risk", "⚑ Concentration", "Review partner concentration and HHI signals"),
+    ("Imports vs exports", "⇄ Trade flows", "Compare verified imports and exports"),
+    ("Partner markets", "◎ Markets", "Explore partner-country rankings and trends"),
+    ("Data & methodology", "≡ Data & methods", "Inspect records, calculations and limitations"),
+]
+
+if "petrotrade_active_page" not in st.session_state:
+    legacy_page = st.session_state.get("main_navigation", "Overview")
+    valid_pages = [item[0] for item in NAV_ITEMS]
+    st.session_state["petrotrade_active_page"] = legacy_page if legacy_page in valid_pages else "Overview"
+
+active_page = st.session_state.get("petrotrade_active_page", "Overview")
+st.markdown(
+    "<div class='navbar-heading'><span class='navbar-kicker'>Navigate workspace</span>"
+    "<span class='navbar-hint'>Select a section to explore the data</span></div>",
+    unsafe_allow_html=True,
+)
+nav_weights = [0.88, 0.88, 1.02, 0.91, 1.08, 1.18, 1.00, 0.82, 1.18]
+nav_columns = st.columns(nav_weights, gap="small")
+for nav_col, (target_page, nav_label, nav_help) in zip(nav_columns, NAV_ITEMS):
+    with nav_col:
+        clicked = st.button(
+            nav_label,
+            key="petro_nav_" + re.sub(r"[^a-z0-9]+", "_", target_page.lower()).strip("_"),
+            type="primary" if active_page == target_page else "secondary",
+            use_container_width=True,
+            help=nav_help,
+        )
+    if clicked and target_page != active_page:
+        if target_page == "Welcome":
+            st.session_state["petrotrade_workspace_entered"] = False
+        else:
+            st.session_state["petrotrade_active_page"] = target_page
+        st.rerun()
+
+st.markdown("<div class='navbar-divider'></div>", unsafe_allow_html=True)
 
 with st.expander("Data connections · label the primary file and add import/export datasets", expanded=False):
     source_left, source_right = st.columns([1, 1.35], gap="large")
@@ -759,14 +808,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-pages = ["Overview", "Commodity breakdown", "Commodity deep dive", "Market opportunity matrix", "Concentration & risk", "Imports vs exports", "Partner markets", "Data & methodology"]
-page = st.radio(
-    "Main navigation",
-    pages,
-    horizontal=True,
-    label_visibility="collapsed",
-    key="main_navigation",
-)
+page = st.session_state.get("petrotrade_active_page", "Overview")
 
 # =============================================================================
 # PAGE 1: OVERVIEW
