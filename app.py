@@ -786,7 +786,25 @@ def reset_global_filters():
     # Restore chart preferences.
     st.session_state["workspace_trend_style_main"] = "Line"
     st.session_state["workspace_top_markets_main"] = 10
-section("LIVE ANALYSIS CONTROLS", "Build your market view", "Set the reporting period, commodity scope, partner market and chart preferences, then apply them together to refresh the workspace.")
+heading_col, reset_col = st.columns([5, 1])
+
+with heading_col:
+    section(
+        "LIVE ANALYSIS CONTROLS",
+        "Build your market view",
+        "Set your reporting period, commodity scope, partner market and chart preferences."
+    )
+
+with reset_col:
+    st.markdown("<div style='height: 1.45rem'></div>", unsafe_allow_html=True)
+
+    st.button(
+        "↺ Reset filters",
+        key="reset_global_filters_button",
+        on_click=reset_global_filters,
+        use_container_width=True,
+        help="Restore all global analysis filters to their defaults."
+    )
 with st.form("global_market_filters", border=True):
     row_one = st.columns([0.8, 1.45, 1.35], gap="medium")
     with row_one[0]:
