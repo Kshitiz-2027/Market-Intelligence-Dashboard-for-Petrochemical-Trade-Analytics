@@ -751,7 +751,41 @@ commodity_options = sorted(
 category_options = sorted(data["Commodity Category"].dropna().unique().tolist())
 market_options = sorted(named_rows(data)["DisplayCountry"].dropna().unique().tolist())
 available_flows = sorted(data["Trade Flow"].dropna().unique().tolist())
+# =============================================================================
+# GLOBAL FILTER RESET
+# =============================================================================
 
+def reset_global_filters():
+    """Restore all global analysis filters to their default values."""
+
+    # Remove saved month selections for different reporting years.
+    for key in list(st.session_state.keys()):
+        if key.startswith("workspace_months_"):
+            del st.session_state[key]
+
+    # Restore latest available reporting year.
+    st.session_state["workspace_year_main"] = latest_year
+
+    # Restore all months available in the latest year.
+    latest_months = [
+        MONTH_ORDER[m - 1]
+        for m in select_months_for_flows(data, latest_year)
+    ]
+
+    st.session_state[
+        f"workspace_months_{latest_year}"
+    ] = latest_months
+
+    # Restore all partner markets.
+    st.session_state["workspace_market_main"] = "All partner markets"
+
+    # Restore all commodity families and chapters.
+    st.session_state["workspace_categories_main"] = category_options
+    st.session_state["workspace_commodities_main"] = commodity_options
+
+    # Restore chart preferences.
+    st.session_state["workspace_trend_style_main"] = "Line"
+    st.session_state["workspace_top_markets_main"] = 10
 section("LIVE ANALYSIS CONTROLS", "Build your market view", "Set the reporting period, commodity scope, partner market and chart preferences, then apply them together to refresh the workspace.")
 with st.form("global_market_filters", border=True):
     row_one = st.columns([0.8, 1.45, 1.35], gap="medium")
