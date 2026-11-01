@@ -215,6 +215,56 @@ button[kind="primary"]:hover { background:#C95C3B !important; border-color:#C95C
 .insight-label { color:#68727D; text-transform:uppercase; letter-spacing:.11em; font-size:.65rem; font-weight:850; margin-bottom:.35rem; }
 .insight-text { color:#263844; font-size:.88rem; line-height:1.55; }
 .callout { background:#FFF5E7; border:1px solid #E7C98C; color:#74532B; border-radius:8px; padding:.75rem .95rem; font-size:.83rem; line-height:1.55; margin:.4rem 0 .85rem; }
+/* Custom empty states */
+.empty-state {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: #FFFEFC;
+    border: 1px dashed #D6CFC3;
+    border-left: 4px solid #E46F4A;
+    border-radius: 10px 16px 10px 16px;
+    padding: 18px 20px;
+    margin: 10px 0 18px;
+    box-shadow: 0 3px 10px rgba(23,42,58,.025);
+}
+
+.empty-state-mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 36px;
+    height: 36px;
+    border-radius: 9px;
+    background: #FBE8DF;
+    color: #C95C3B;
+    font-size: 17px;
+    font-weight: 800;
+}
+
+.empty-state-content {
+    flex: 1;
+}
+
+.empty-state-title {
+    color: #172A3A;
+    font-size: .95rem;
+    font-weight: 750;
+    margin-bottom: 4px;
+}
+
+.empty-state-message {
+    color: #68727D;
+    font-size: .84rem;
+    line-height: 1.55;
+}
+
+.empty-state-action {
+    color: #C95C3B;
+    font-size: .78rem;
+    font-weight: 650;
+    margin-top: 8px;
+}
 .info-panel { background:#F0EEE8; border:1px solid #E3DED4; border-left:3px solid #E46F4A; border-radius:8px 14px 8px 14px; padding:1rem 1.15rem; margin:.4rem 0 .95rem; color:#4B5D68; line-height:1.6; }
 .info-panel b { color:#172A3A; }
 .panel-note { color:#7A838B; font-size:.75rem; line-height:1.48; }
