@@ -1394,7 +1394,11 @@ elif page == "Commodity deep dive":
         deep_prior = deep_prior[deep_prior["DisplayCountry"] == deep_partner].copy()
 
     if deep_current.empty:
-        st.info("No records are available for this commodity under the selected year, months and flow. Try another commodity or widen the reporting-period filters.")
+        empty_state(
+    "Commodity data unavailable",
+    "There are no recorded observations for this commodity under the selected reporting period and trade flow.",
+    "Try another HS chapter, select All loaded flows, or widen the reporting period."
+)
     else:
         deep_value_mn = float(deep_current["Value_USD_Mn"].sum())
         deep_prior_mn = float(deep_prior["Value_USD_Mn"].sum())
