@@ -1005,7 +1005,11 @@ current = base_filtered[(base_filtered["Year"] == selected_year) & base_filtered
 prior_year = selected_year - 1
 prior = base_filtered[(base_filtered["Year"] == prior_year) & base_filtered["MonthNum"].isin(months_present)].copy()
 if current.empty:
-    st.warning("No records match this combination of period, commodity and partner filters. Widen the live controls above and try again.")
+    empty_state(
+        "No matching trade records",
+        "The selected combination of reporting period, commodity groups and partner market did not produce any records.",
+        "Try selecting a different reporting year, widening the month range, or choosing All partner markets."
+    )
     st.stop()
 month_labels = [pd.Timestamp(year=2000, month=m, day=1).strftime("%b") for m in months_present]
 full_year_selected = months_present == list(range(1, 13))
