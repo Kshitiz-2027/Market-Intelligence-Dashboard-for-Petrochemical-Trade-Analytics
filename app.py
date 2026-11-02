@@ -966,13 +966,27 @@ with st.form("global_market_filters", border=True):
         st.caption("Choose several filters, then apply them together. This avoids a full dashboard refresh after every individual selection.")
 
 if not selected_categories:
-    st.warning("Select at least one commodity family in the live controls to continue.")
+    empty_state(
+        "No commodity family selected",
+        "The dashboard needs at least one commodity family to calculate market analytics.",
+        "Select one or more commodity families in Live Analysis Controls and apply the filters."
+    )
     st.stop()
+
 if not selected_commodities:
-    st.warning("Select at least one HS commodity chapter in the live controls to continue.")
+    empty_state(
+        "No commodity chapter selected",
+        "There are no HS chapters selected for the current analysis.",
+        "Choose at least one HS chapter and apply the filters."
+    )
     st.stop()
+
 if not selected_month_labels:
-    st.warning("Select at least one month in the live controls to continue.")
+    empty_state(
+        "No reporting months selected",
+        "The selected reporting period does not contain any active months.",
+        "Select one or more months to continue."
+    )
     st.stop()
 
 months_present = sorted([MONTH_ORDER.index(m) + 1 for m in selected_month_labels])
