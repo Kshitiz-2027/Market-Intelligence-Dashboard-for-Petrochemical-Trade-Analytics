@@ -425,6 +425,39 @@ def insight_card(mark, label, text):
         unsafe_allow_html=True,
     )
 
+def empty_state(title, message, next_step=None):
+    """
+    Display a consistent, user-friendly empty state.
+    """
+
+    action_html = (
+        f"<div class='empty-state-action'>"
+        f"{safe(next_step)}</div>"
+        if next_step else ""
+    )
+
+    st.markdown(
+        f"""
+        <div class="empty-state">
+            <div class="empty-state-mark">i</div>
+
+            <div class="empty-state-content">
+                <div class="empty-state-title">
+                    {safe(title)}
+                </div>
+
+                <div class="empty-state-message">
+                    {safe(message)}
+                </div>
+
+                {action_html}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
 
 def style_fig(fig, height=360, legend=True):
     fig.update_layout(
