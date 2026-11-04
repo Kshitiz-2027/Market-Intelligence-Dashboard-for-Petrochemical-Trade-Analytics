@@ -1634,10 +1634,11 @@ elif page == "Commodity deep dive":
             "DisplayCountry": "Partner market",
             "Share (%)": "Share of named-market value (%)",
         })
+        partner_ledger.columns = partner_ledger.columns.str.strip()
         deep_table = deep_table[[
             "Partner market", "Current value (US$ B)", "Comparable prior value (US$ B)",
             "Share of named-market value (%)", "YoY change (%)"
-        ]].sort_values("Current value (US$ B) ", ascending=False)
+        ]].sort_values("Current value (US$ B)", ascending=False)
         st.dataframe(
             deep_table,
             use_container_width=True,
