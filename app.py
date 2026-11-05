@@ -1310,6 +1310,397 @@ elif page == "Commodity breakdown":
     st.dataframe(display_ledger, use_container_width=True, hide_index=True, height=compact_height(len(display_ledger), max_height=360))
     st.download_button("Download commodity ledger", ledger.to_csv(index=False).encode("utf-8"), file_name=f"petrotrade_commodity_ledger_{selected_year}.csv", mime="text/csv")
 
+    # ============================================================
+    # COMMIT 04: COMMODITY COMPARISON ANALYSIS
+    # ============================================================
+
+    st.write("")
+
+    section(
+        "COMMODITY COMPARISON",
+        "Compare commodity performance side by side",
+        "Select multiple commodity groups to compare recorded values, "
+        "monthly movement and year-on-year performance."
+    )
+
+    comparison_options = list(selected_commodities)
+    comparison_key = "commodity_comparison_selection"
+
+    # Keep saved selections valid when global filters change.
+    if comparison_key not in st.session_state:
+        st.session_state[comparison_key] = comparison_options[:3]
+    else:
+        st.session_state[comparison_key] = [
+            x for x in st.session_state[comparison_key]
+            if x in comparison_options
+        ]
+
+    if not st.session_state[comparison_key] and comparison_options:
+        st.session_state[comparison_key] = comparison_options[:2]
+
+    comparison_selection = st.multiselect(
+        "Select commodity groups to compare",
+        options=comparison_options,
+        key=comparison_key,
+        help="Select at least two commodity groups."
+    )
+
+    # Let the user decide whether to compare all loaded flows
+    # or a particular direction.
+    comparison_flow_options = (
+        ["All loaded flows"] + sorted(
+            current["Trade Flow"].dropna().unique().tolist()
+        )
+    )
+
+    if st.session_state.get("comparison_flow_key") not in comparison_flow_options:
+        st.session_state["comparison_flow_key"] = "All loaded flows"
+
+    comparison_flow = st.selectbox(
+        "Trade flow for comparison",
+        options=comparison_flow_options,
+        key="comparison_flow_key"
+    )
+
+    if len(comparison_selection) < 2:
+
+        empty_state(
+            "Select at least two commodities",
+            "Commodity comparison requires two or more selected HS chapters.",
+            "Choose additional commodity groups using the selector above."
+        )
+
+    else:
+
+        comparison_current = current[
+            current["Commodity"].isin(comparison_selection)
+        ].copy()
+
+        comparison_prior = prior[
+            prior["Commodity"].isin(comparison_selection)
+        ].copy()
+
+        if comparison_flow != "All loaded flows":
+            comparison_current = comparison_current[
+                comparison_current["Trade Flow"] == comparison_flow
+            ].copy()
+
+            comparison_prior = comparison_prior[
+                comparison_prior["Trade Flow"] == comparison_flow
+            ].copy()
+
+        if comparison_current.empty:
+
+            empty_state(
+                "No comparison records available",
+                "The selected commodities and trade flow have no records "
+                "for the current reporting period.",
+                "Try another flow or widen the selected reporting months."
+            )
+
+        else:
+
+            # Aggregate current-period values.
+            current_summary = (
+                comparison_current
+                .groupby("Commodity", as_index=False)["Value_USD_Mn"]
+                .sum()
+                .rename(columns={
+                    "Value_USD_Mn": "Current_Mn"
+                })
+            )
+
+            # Aggregate matching prior-year values.
+            prior_summary = (
+                comparison_prior
+                .groupby("Commodity", as_index=False)["Value_USD_Mn"]
+                .sum()
+                .rename(columns={
+                    "Value_USD_Mn": "Prior_Mn"
+                })
+            )
+
+            # Preserve selected commodities even if a prior observation
+            # is unavailable for one of them.
+            comparison_summary = pd.DataFrame({
+                "Commodity": comparison_selection
+            })
+
+            comparison_summary = comparison_summary.merge(
+                current_summary,
+                on="Commodity",
+                how="left"
+            )
+
+            comparison_summary = comparison_summary.merge(
+                prior_summary,
+                on="Commodity",
+                how="left"
+            )
+
+            comparison_summary["Current_Mn"] = (
+                comparison_summary["Current_Mn"].fillna(0)
+            )
+
+            comparison_summary["Current value (US$ B)"] = (
+                comparison_summary["Current_Mn"] / 1000
+            )
+
+            comparison_summary["Comparable prior value (US$ B)"] = (
+                comparison_summary["Prior_Mn"] / 1000
+            )
+
+            # Calculate growth only where the previous-period
+            # denominator is positive.
+            comparison_summary["YoY change (%)"] = np.nan
+
+            valid_growth = comparison_summary["Prior_Mn"] > 0
+
+            comparison_summary.loc[
+                valid_growth,
+                "YoY change (%)"
+            ] = (
+                comparison_summary.loc[
+                    valid_growth, "Current_Mn"
+                ]
+                / comparison_summary.loc[
+                    valid_growth, "Prior_Mn"
+                ] - 1
+            ) * 100
+
+            # Calculate portfolio contribution.
+            total_comparison_value = (
+                comparison_summary["Current_Mn"].sum()
+            )
+
+            comparison_summary["Contribution (%)"] = np.where(
+                total_comparison_value > 0,
+                comparison_summary["Current_Mn"]
+                / total_comparison_value * 100,
+                np.nan
+            )
+
+            # ----------------------------------------------------
+            # Comparison KPI cards
+            # ----------------------------------------------------
+
+            k1, k2, k3 = st.columns(3)
+
+            largest = comparison_summary.loc[
+                comparison_summary["Current_Mn"].idxmax()
+            ]
+
+            valid_growth_rows = comparison_summary.dropna(
+                subset=["YoY change (%)"]
+            )
+
+            with k1:
+                kpi_card(
+                    "COMMODITIES COMPARED",
+                    f"{len(comparison_selection)}",
+                    "Selected HS commodity groups",
+                    TEAL
+                )
+
+            with k2:
+                kpi_card(
+                    "LARGEST RECORDED VALUE",
+                    largest["Commodity"],
+                    fmt_money_bn(
+                        largest["Current value (US$ B)"]
+                    ),
+                    "#365B78"
+                )
+
+            with k3:
+                if not valid_growth_rows.empty:
+
+                    fastest = valid_growth_rows.loc[
+                        valid_growth_rows["YoY change (%)"].idxmax()
+                    ]
+
+                    kpi_card(
+                        "FASTEST YoY GROWTH",
+                        fastest["Commodity"],
+                        fmt_pct(fastest["YoY change (%)"]),
+                        GREEN
+                    )
+
+                else:
+                    kpi_card(
+                        "YoY GROWTH",
+                        "Unavailable",
+                        "No positive comparable prior-period baseline",
+                        "#E0B15A"
+                    )
+
+            st.write("")
+
+            # ----------------------------------------------------
+            # Current versus previous period chart
+            # ----------------------------------------------------
+
+            chart_left, chart_right = st.columns(2, gap="large")
+
+            with chart_left:
+
+                st.markdown("**Current vs previous-period value**")
+
+                comparison_long = comparison_summary.melt(
+                    id_vars=["Commodity"],
+                    value_vars=[
+                        "Current value (US$ B)",
+                        "Comparable prior value (US$ B)"
+                    ],
+                    var_name="Period",
+                    value_name="Value_USD_Bn"
+                ).dropna(subset=["Value_USD_Bn"])
+
+                fig = px.bar(
+                    comparison_long,
+                    x="Commodity",
+                    y="Value_USD_Bn",
+                    color="Period",
+                    barmode="group",
+                    color_discrete_sequence=[
+                        TEAL,
+                        "#AAB7C4"
+                    ],
+                    labels={
+                        "Commodity": "Commodity group",
+                        "Value_USD_Bn": "Value (US$ billion)"
+                    }
+                )
+
+                fig.update_layout(
+                    xaxis_title="Commodity group",
+                    yaxis_title="Value (US$ billion)",
+                    legend_title=""
+                )
+
+                fig.update_traces(
+                    hovertemplate=(
+                        "%{x}<br>"
+                        "%{fullData.name}: US$%{y:,.3f}B"
+                        "<extra></extra>"
+                    )
+                )
+
+                render_chart(
+                    fig,
+                    "comparison_current_prior",
+                    400,
+                    legend=True
+                )
+
+            # ----------------------------------------------------
+            # Monthly trend comparison
+            # ----------------------------------------------------
+
+            with chart_right:
+
+                st.markdown("**Monthly commodity movement**")
+
+                monthly_comparison = (
+                    comparison_current
+                    .groupby(
+                        ["MonthNum", "Month", "Commodity"],
+                        as_index=False
+                    )["Value_USD_Bn"]
+                    .sum()
+                    .sort_values("MonthNum")
+                )
+
+                if not monthly_comparison.empty:
+
+                    fig = px.line(
+                        monthly_comparison,
+                        x="Month",
+                        y="Value_USD_Bn",
+                        color="Commodity",
+                        markers=True,
+                        category_orders={
+                            "Month": month_labels
+                        },
+                        color_discrete_sequence=PALETTE,
+                        labels={
+                            "Month": "Month",
+                            "Value_USD_Bn": "Value (US$ billion)"
+                        }
+                    )
+
+                    fig.update_layout(
+                        hovermode="x unified",
+                        xaxis_title="Month",
+                        yaxis_title="Value (US$ billion)",
+                        legend_title="Commodity"
+                    )
+
+                    render_chart(
+                        fig,
+                        "comparison_monthly_trend",
+                        400,
+                        legend=True
+                    )
+
+            # ----------------------------------------------------
+            # Detailed comparison table
+            # ----------------------------------------------------
+
+            st.write("")
+
+            section(
+                "COMPARISON SUMMARY",
+                "Inspect the selected commodity groups",
+                "Values use the same months in the current and previous reporting years."
+            )
+
+            display_comparison = comparison_summary[
+                [
+                    "Commodity",
+                    "Current value (US$ B)",
+                    "Comparable prior value (US$ B)",
+                    "YoY change (%)",
+                    "Contribution (%)"
+                ]
+            ].copy()
+
+            st.dataframe(
+                display_comparison,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Current value (US$ B)":
+                        st.column_config.NumberColumn(
+                            format="$%.3fB"
+                        ),
+                    "Comparable prior value (US$ B)":
+                        st.column_config.NumberColumn(
+                            format="$%.3fB"
+                        ),
+                    "YoY change (%)":
+                        st.column_config.NumberColumn(
+                            format="%+.1f%%"
+                        ),
+                    "Contribution (%)":
+                        st.column_config.NumberColumn(
+                            format="%.1f%%"
+                        )
+                }
+            )
+
+            st.download_button(
+                "Download commodity comparison as CSV",
+                data=display_comparison.to_csv(
+                    index=False
+                ).encode("utf-8"),
+                file_name=(
+                    f"petrotrade_comparison_{selected_year}.csv"
+                ),
+                mime="text/csv",
+                key="download_commodity_comparison"
+            )
+
     with st.expander("Commodity categories explained"):
         explanations = []
         for code, info in COMMODITY_INFO.items():
