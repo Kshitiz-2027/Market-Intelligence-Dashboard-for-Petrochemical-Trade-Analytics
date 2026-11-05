@@ -1395,10 +1395,10 @@ elif page == "Commodity deep dive":
 
     if deep_current.empty:
         empty_state(
-    "Commodity data unavailable",
-    "There are no recorded observations for this commodity under the selected reporting period and trade flow.",
-    "Try another HS chapter, select All loaded flows, or widen the reporting period."
-)
+            "Commodity data unavailable",
+            "There are no recorded observations for this commodity under the selected reporting period and trade flow.",
+            "Try another HS chapter, select All loaded flows, or widen the reporting period."
+        )
     else:
         deep_value_mn = float(deep_current["Value_USD_Mn"].sum())
         deep_prior_mn = float(deep_prior["Value_USD_Mn"].sum())
@@ -1624,85 +1624,85 @@ elif page == "Commodity deep dive":
         st.write("")
         deep_table = deep_partner_summary.copy()
 
-deep_table["Current value (US$ B)"] = (
-    deep_table["Current_Mn"] / 1000
-)
-
-deep_table["Comparable prior value (US$ B)"] = (
-    deep_table["Prior_Mn"] / 1000
-)
-
-deep_table = deep_table.rename(columns={
-    "DisplayCountry": "Partner market",
-    "Share (%)": "Share of named-market value (%)",
-})
-
-# Remove accidental whitespace from all column names.
-deep_table.columns = deep_table.columns.astype(str).str.strip()
-
-required_columns = [
-    "Partner market",
-    "Current value (US$ B)",
-    "Comparable prior value (US$ B)",
-    "Share of named-market value (%)",
-    "YoY change (%)",
-]
-
-# Validate the ledger before displaying it.
-missing_columns = [
-    col for col in required_columns
-    if col not in deep_table.columns
-]
-
-if missing_columns:
-    st.error(
-        f"Partner ledger is missing columns: {missing_columns}"
-    )
-else:
-    deep_table = (
-        deep_table[required_columns]
-        .sort_values(
-            "Current value (US$ B)",
-            ascending=False
+        deep_table["Current value (US$ B)"] = (
+            deep_table["Current_Mn"] / 1000
         )
-    )
 
-    st.dataframe(
-        deep_table,
-        use_container_width=True,
-        hide_index=True,
-        height=compact_height(
-            len(deep_table),
-            max_height=420
-        ),
-        column_config={
-            "Current value (US$ B)": (
-                st.column_config.NumberColumn(format="$%.3fB")
-            ),
-            "Comparable prior value (US$ B)": (
-                st.column_config.NumberColumn(format="$%.3fB")
-            ),
-            "Share of named-market value (%)": (
-                st.column_config.NumberColumn(format="%.1f%%")
-            ),
-            "YoY change (%)": (
-                st.column_config.NumberColumn(format="%+.1f%%")
-            ),
-        },
-    )
+        deep_table["Comparable prior value (US$ B)"] = (
+            deep_table["Prior_Mn"] / 1000
+        )
 
-    deep_export = deep_table.to_csv(index=False).encode("utf-8")
+        deep_table = deep_table.rename(columns={
+            "DisplayCountry": "Partner market",
+            "Share (%)": "Share of named-market value (%)",
+        })
 
-    st.download_button(
-        "Download commodity partner profile as CSV",
-        data=deep_export,
-        file_name=(
-            f"petrotrade_HS{deep_hs_code}_"
-            f"partner_profile_{selected_year}.csv"
-        ),
-        mime="text/csv",
-        type="primary",
-    )
+        # Remove accidental whitespace from all column names.
+        deep_table.columns = deep_table.columns.astype(str).str.strip()
+
+        required_columns = [
+            "Partner market",
+            "Current value (US$ B)",
+            "Comparable prior value (US$ B)",
+            "Share of named-market value (%)",
+            "YoY change (%)",
+        ]
+
+        # Validate the ledger before displaying it.
+        missing_columns = [
+            col for col in required_columns
+            if col not in deep_table.columns
+        ]
+
+        if missing_columns:
+            st.error(
+                f"Partner ledger is missing columns: {missing_columns}"
+            )
+        else:
+            deep_table = (
+                deep_table[required_columns]
+                .sort_values(
+                    "Current value (US$ B)",
+                    ascending=False
+                )
+            )
+
+            st.dataframe(
+                deep_table,
+                use_container_width=True,
+                hide_index=True,
+                height=compact_height(
+                    len(deep_table),
+                    max_height=420
+                ),
+                column_config={
+                    "Current value (US$ B)": (
+                        st.column_config.NumberColumn(format="$%.3fB")
+                    ),
+                    "Comparable prior value (US$ B)": (
+                        st.column_config.NumberColumn(format="$%.3fB")
+                    ),
+                    "Share of named-market value (%)": (
+                        st.column_config.NumberColumn(format="%.1f%%")
+                    ),
+                    "YoY change (%)": (
+                        st.column_config.NumberColumn(format="%+.1f%%")
+                    ),
+                },
+            )
+
+            deep_export = deep_table.to_csv(index=False).encode("utf-8")
+
+            st.download_button(
+                "Download commodity partner profile as CSV",
+                data=deep_export,
+                file_name=(
+                    f"petrotrade_HS{deep_hs_code}_"
+                    f"partner_profile_{selected_year}.csv"
+                ),
+                mime="text/csv",
+                type="primary",
+            )
     with st.expander("Commodity profile methodology and limitations", expanded=False):
         st.write(
             "The selected HS chapter is a broad product group. The profile aggregates the selected month's USD million values across the selected trade flow and partner scope. Year-on-year growth compares the same selected months in the previous year and is shown only when the previous-period value is positive. Partner shares and rankings exclude aggregate or unspecified country labels. The annual history chart uses the same selected months for each year and shows the count of months available. These outputs describe the supplied data; they do not identify causes or forecast future trade."
