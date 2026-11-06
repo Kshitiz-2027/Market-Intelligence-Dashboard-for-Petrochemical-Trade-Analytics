@@ -3230,6 +3230,61 @@ else:
         type="primary",
     )
 
+    # ============================================================
+    # COMMIT 05: EXCEL ANALYTICS EXPORT
+    # ============================================================
+
+    report_metadata = {
+        "Project": "PetroTrade Intelligence",
+        "Reporting year": selected_year,
+        "Reporting period": period_label,
+        "Selected months": ", ".join(month_labels),
+        "Commodity families": ", ".join(selected_categories),
+        "HS chapters": ", ".join(selected_commodities),
+        "Partner market": selected_market,
+        "Available trade flows": ", ".join(available_flows),
+        "Trade direction status": flow_status_label,
+        "Total recorded value (USD Mn)": current_total_mn,
+        "Comparable prior value (USD Mn)": prior_total_mn,
+        "Year-on-year change (%)": yoy_total,
+        "Filtered record count": len(table),
+        "Source": "DGCIS monthly trade extract",
+    }
+
+    excel_bytes = build_excel_report(
+        current,
+        prior,
+        table,
+        report_metadata
+    )
+
+    st.write("")
+
+    st.markdown(
+        "**Complete analytical workbook**"
+    )
+
+    st.caption(
+        "Download the current analytical scope across multiple "
+        "worksheets, including commodity summaries, partner markets, "
+        "monthly trends and filtered source records."
+    )
+
+    st.download_button(
+        "Download PetroTrade Excel Report",
+        data=excel_bytes,
+        file_name=(
+            f"PetroTrade_Analytics_{selected_year}.xlsx"
+        ),
+        mime=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
+        type="primary",
+        key="download_petrotrade_excel"
+    )
+
+
 st.divider()
 st.markdown(
     "<div class='panel-note'>PetroTrade Intelligence · DGCIS CSV supplied for this project. Commodity groups are derived from HS chapters. The app preserves the distinction between imported, exported, and unverified trade-flow data. Use the visible live controls to update the whole workspace. Hover over charts for values; use each chart's modebar to zoom, pan, or download the image.</div>",
