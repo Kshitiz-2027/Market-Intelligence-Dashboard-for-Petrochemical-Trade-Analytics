@@ -546,6 +546,273 @@ def build_commodity_ledger(current_data, prior_data, commodity_names, available_
     return pd.DataFrame(rows)
 
 
+def build_excel_report(
+    current_data,
+    prior_data,
+    filtered_records,
+    metadata
+):
+    """
+    Generate a multi-sheet PetroTrade analytics workbook.
+    """
+
+    output = BytesIO()
+
+    # ---------------------------------------------------------
+    # 1. COMMODITY SUMMARY
+    # ---------------------------------------------------------
+
+    group_columns = [
+        "HS Code",
+        "Commodity",
+        "Commodity Category",
+        "Trade Flow"
+    ]
+
+    current_summary = (
+        current_data
+        .groupby(group_columns, as_index=False)["Value_USD_Mn"]
+        .sum()
+        .rename(columns={
+            "Value_USD_Mn": "Current value (USD Mn)"
+        })
+    )
+
+    prior_summary = (
+        prior_data
+        .groupby(group_columns, as_index=False)["Value_USD_Mn"]
+        .sum()
+        .rename(columns={
+            "Value_USD_Mn": "Comparable prior value (USD Mn)"
+        })
+    )
+
+    commodity_summary = current_summary.merge(
+        prior_summary,
+        on=group_columns,
+        how="left"
+    )
+
+    commodity_summary["YoY change (%)"] = np.nan
+
+    valid = (
+        commodity_summary["Comparable prior value (USD Mn)"] > 0
+    )
+
+    commodity_summary.loc[
+        valid, "YoY change (%)"
+    ] = (
+        commodity_summary.loc[
+            valid, "Current value (USD Mn)"
+        ]
+        / commodity_summary.loc[
+            valid, "Comparable prior value (USD Mn)"
+        ] - 1
+    ) * 100
+
+    # ---------------------------------------------------------
+    # 2. PARTNER MARKET SUMMARY
+    # ---------------------------------------------------------
+
+    valid_partners = named_rows(current_data)
+
+    partner_summary = (
+        valid_partners
+        .groupby(
+            ["DisplayCountry", "Trade Flow"],
+            as_index=False
+        )["Value_USD_Mn"]
+        .sum()
+        .rename(columns={
+            "DisplayCountry": "Partner market",
+            "Value_USD_Mn": "Recorded value (USD Mn)"
+        })
+        .sort_values(
+            "Recorded value (USD Mn)",
+            ascending=False
+        )
+    )
+
+    # ---------------------------------------------------------
+    # 3. TRADE FLOW SUMMARY
+    # ---------------------------------------------------------
+
+    flow_summary = (
+        current_data
+        .groupby("Trade Flow", as_index=False)["Value_USD_Mn"]
+        .sum()
+        .rename(columns={
+            "Value_USD_Mn": "Recorded value (USD Mn)"
+        })
+    )
+
+    # ---------------------------------------------------------
+    # 4. MONTHLY TRENDS
+    # ---------------------------------------------------------
+
+    monthly_summary = (
+        current_data
+        .groupby(
+            ["MonthNum", "Month", "Commodity", "Trade Flow"],
+            as_index=False
+        )["Value_USD_Mn"]
+        .sum()
+        .sort_values(
+            ["MonthNum", "Commodity", "Trade Flow"]
+        )
+    )
+
+    # ---------------------------------------------------------
+    # 5. EXECUTIVE SUMMARY
+    # ---------------------------------------------------------
+
+    executive_summary = pd.DataFrame(
+        list(metadata.items()),
+        columns=["Metric", "Value"]
+    )
+
+    # ---------------------------------------------------------
+    # 6. WRITE EXCEL WORKBOOK
+    # ---------------------------------------------------------
+
+    with pd.ExcelWriter(
+        output,
+        engine="openpyxl"
+    ) as writer:
+
+        executive_summary.to_excel(
+            writer,
+            sheet_name="Executive Summary",
+            index=False
+        )
+
+        commodity_summary.to_excel(
+            writer,
+            sheet_name="Commodity Summary",
+            index=False
+        )
+
+        partner_summary.to_excel(
+            writer,
+            sheet_name="Partner Markets",
+            index=False
+        )
+
+        flow_summary.to_excel(
+            writer,
+            sheet_name="Trade Flow Summary",
+            index=False
+        )
+
+        monthly_summary.to_excel(
+            writer,
+            sheet_name="Monthly Trends",
+            index=False
+        )
+
+        filtered_records.to_excel(
+            writer,
+            sheet_name="Filtered Records",
+            index=False
+        )
+
+        # -----------------------------------------------------
+        # WORKBOOK FORMATTING
+        # -----------------------------------------------------
+
+        from openpyxl.styles import (
+            Font,
+            PatternFill,
+            Border,
+            Side,
+            Alignment
+        )
+
+        header_fill = PatternFill(
+            fill_type="solid",
+            fgColor="172A3A"
+        )
+
+        header_font = Font(
+            bold=True,
+            color="FFFFFF",
+            size=10
+        )
+
+        thin_border = Border(
+            bottom=Side(
+                style="thin",
+                color="D9DDE3"
+            )
+        )
+
+        for worksheet in writer.book.worksheets:
+
+            worksheet.freeze_panes = "A2"
+
+            if worksheet.max_row >= 1:
+                worksheet.auto_filter.ref = worksheet.dimensions
+
+            # Format header row.
+            for cell in worksheet[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(
+                    horizontal="center",
+                    vertical="center"
+                )
+
+            worksheet.row_dimensions[1].height = 24
+
+            # Adjust column widths and numeric formats.
+            headers = {
+                cell.column: str(cell.value)
+                for cell in worksheet[1]
+            }
+
+            for col_index, header in headers.items():
+
+                column_letter = worksheet.cell(
+                    row=1,
+                    column=col_index
+                ).column_letter
+
+                max_length = max(
+                    len(str(worksheet.cell(row=row, column=col_index).value or ""))
+                    for row in range(1, worksheet.max_row + 1)
+                )
+
+                worksheet.column_dimensions[
+                    column_letter
+                ].width = min(
+                    max(max_length + 3, 13),
+                    42
+                )
+
+                for row in range(2, worksheet.max_row + 1):
+                    cell = worksheet.cell(
+                        row=row,
+                        column=col_index
+                    )
+
+                    cell.border = thin_border
+
+                    if "(USD Mn)" in header or "(US$ million)" in header:
+                        cell.number_format = '#,##0.00;[Red]-#,##0.00'
+
+                    elif "(US$ B)" in header:
+                        cell.number_format = '0.000'
+
+                    elif "(%)" in header:
+                        # Percent values are stored as 11.5, not 0.115.
+                        cell.number_format = '0.0"%"'
+
+    output.seek(0)
+
+    return output.getvalue()
+
+
+
 # =============================================================================
 # Landing / welcome page (shown before the analytics workspace)
 # =============================================================================
