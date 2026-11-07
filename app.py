@@ -1751,7 +1751,12 @@ elif page == "Commodity breakdown":
             # Comparison KPI cards
             # ----------------------------------------------------
 
-            k1, k2, k3 = st.columns(3)
+            
+            # ----------------------------------------------------
+            # COMMIT 06: FOUR-CARD COMPARISON KPI STRIP
+            # ----------------------------------------------------
+
+            k1, k2, k3, k4 = st.columns(4, gap="medium")
 
             largest = comparison_summary.loc[
                 comparison_summary["Current_Mn"].idxmax()
@@ -1764,24 +1769,31 @@ elif page == "Commodity breakdown":
             with k1:
                 kpi_card(
                     "COMMODITIES COMPARED",
-                    f"{len(comparison_selection)}",
+                    str(len(comparison_selection)),
                     "Selected HS commodity groups",
                     TEAL
                 )
 
             with k2:
                 kpi_card(
+                    "COMBINED RECORDED VALUE",
+                    fmt_money_mn(total_comparison_value),
+                    "Across all selected commodity groups",
+                    "#365B78"
+                )
+
+            with k3:
+                kpi_card(
                     "LARGEST RECORDED VALUE",
                     largest["Commodity"],
                     fmt_money_bn(
                         largest["Current value (US$ B)"]
                     ),
-                    "#365B78"
+                    "#E0B15A"
                 )
 
-            with k3:
+            with k4:
                 if not valid_growth_rows.empty:
-
                     fastest = valid_growth_rows.loc[
                         valid_growth_rows["YoY change (%)"].idxmax()
                     ]
@@ -1792,16 +1804,13 @@ elif page == "Commodity breakdown":
                         fmt_pct(fastest["YoY change (%)"]),
                         GREEN
                     )
-
                 else:
                     kpi_card(
-                        "YoY GROWTH",
+                        "FASTEST YoY GROWTH",
                         "Unavailable",
-                        "No positive comparable prior-period baseline",
-                        "#E0B15A"
+                        "No positive comparable prior-year baseline",
+                        RED
                     )
-
-            st.write("")
 
             # ----------------------------------------------------
             # Current versus previous period chart
