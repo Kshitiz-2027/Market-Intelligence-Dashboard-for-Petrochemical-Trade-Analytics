@@ -1941,6 +1941,54 @@ elif page == "Commodity breakdown":
                 ]
             ].copy()
 
+        
+            # ====================================================
+            # COMMIT 07: CUSTOM COMMODITY SORTING
+            # ====================================================
+
+            st.markdown("**Rank comparison results**")
+
+            sort_col, order_col = st.columns([2, 1])
+
+            with sort_col:
+                sort_option = st.selectbox(
+                    "Rank commodities by",
+                    options=[
+                        "Recorded value",
+                        "YoY growth",
+                        "Portfolio contribution"
+                    ],
+                    key="commodity_comparison_sort"
+                )
+
+            sort_mapping = {
+                "Recorded value": "Current value (US$ B)",
+                "YoY growth": "YoY change (%)",
+                "Portfolio contribution": "Contribution (%)"
+            }
+
+            with order_col:
+                descending = st.checkbox(
+                    "Highest first",
+                    value=True,
+                    key="commodity_comparison_descending"
+                )
+
+            display_comparison = display_comparison.sort_values(
+                by=sort_mapping[sort_option],
+                ascending=not descending,
+                na_position="last",
+                kind="stable"
+            ).reset_index(drop=True)
+
+            # Add ranking numbers.
+            display_comparison.insert(
+                0,
+                "Rank",
+                range(1, len(display_comparison) + 1)
+            )
+
+
             st.dataframe(
                 display_comparison,
                 use_container_width=True,
