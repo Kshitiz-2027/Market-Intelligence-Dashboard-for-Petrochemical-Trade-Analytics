@@ -490,6 +490,33 @@ def render_chart(fig, key, height=360, legend=True):
         },
     )
 
+# ============================================================
+# COMMIT 08: CACHED PLOTLY PNG EXPORT
+# ============================================================
+
+@st.cache_data(show_spinner=False)
+def export_chart_png(
+    figure_json: str,
+    width: int = 1600,
+    height: int = 1000,
+    scale: int = 2
+) -> bytes:
+    """
+    Convert a Plotly figure into a high-resolution PNG image.
+    Cache the result to avoid repeated image generation.
+    """
+    import json
+
+    export_figure = go.Figure(json.loads(figure_json))
+
+    return export_figure.to_image(
+        format="png",
+        width=width,
+        height=height,
+        scale=scale
+    )
+
+
 
 def named_rows(frame):
     if frame.empty:
