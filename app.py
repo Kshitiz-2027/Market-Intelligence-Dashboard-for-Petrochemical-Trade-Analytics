@@ -1,6 +1,7 @@
 from pathlib import Path
 from io import BytesIO
 import html
+import hashlib
 import re
 
 import numpy as np
@@ -494,27 +495,36 @@ def render_chart(fig, key, height=360, legend=True):
 # COMMIT 08: CACHED PLOTLY PNG EXPORT
 # ============================================================
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=12)
 def export_chart_png(
     figure_json: str,
-    width: int = 1600,
-    height: int = 1000,
-    scale: int = 2
+    width: int = 1800,
+    height: int = 1125,
+    scale: int = 2,
 ) -> bytes:
-    """
-    Convert a Plotly figure into a high-resolution PNG image.
-    Cache the result to avoid repeated image generation.
+    """Convert a Plotly figure to a cached, presentation-ready PNG.
+
+    Static image rendering is provided by Kaleido. With Kaleido 1.x,
+    a compatible Chrome/Chromium installation is also required.
     """
     import json
 
-    export_figure = go.Figure(json.loads(figure_json))
-
-    return export_figure.to_image(
+    figure_payload = json.loads(figure_json)
+    export_figure = go.Figure(figure_payload)
+    export_figure.update_layout(
+        width=width,
+        height=height,
+        autosize=False,
+    )
+    image_bytes = export_figure.to_image(
         format="png",
         width=width,
         height=height,
-        scale=scale
+        scale=scale,
     )
+    if not image_bytes:
+        raise RuntimeError("The chart renderer returned an empty PNG image.")
+    return image_bytes
 
 
 
@@ -2696,6 +2706,78 @@ elif page == "Market opportunity matrix":
             fig.update_yaxes(ticksuffix="%", zeroline=True, zerolinecolor="#BFC8CE")
             render_chart(fig, "market_opportunity_matrix_scatter", 500)
 
+            # ========================================================
+            # COMMIT 08: EXPORT THE CURRENT OPPORTUNITY MATRIX AS PNG
+            # ========================================================
+            # Keep the export control beside the chart. Prepare the image
+            # only when requested, then retain it in session state so the
+            # download button remains available after Streamlit reruns.
+            with st.expander("Export opportunity chart", expanded=False):
+                st.caption(
+                    "Prepare a high-resolution PNG of the chart using the "
+                    "current lens, reporting period, growth threshold and filters."
+                )
+                opportunity_figure_json = fig.to_json()
+                opportunity_signature = hashlib.sha256(
+                    opportunity_figure_json.encode("utf-8")
+                ).hexdigest()
+                png_state_key = "opportunity_matrix_png_bytes"
+                signature_state_key = "opportunity_matrix_png_signature"
+
+                # Invalidate a previously prepared image when chart inputs change.
+                if st.session_state.get(signature_state_key) != opportunity_signature:
+                    st.session_state.pop(png_state_key, None)
+                    st.session_state[signature_state_key] = opportunity_signature
+
+                prepare_png = st.button(
+                    "Prepare high-resolution PNG",
+                    key="prepare_opportunity_matrix_png",
+                    type="primary",
+                    help="Render the current opportunity matrix as a PNG image.",
+                )
+
+                if prepare_png:
+                    try:
+                        with st.spinner("Preparing chart image…"):
+                            prepared_png = export_chart_png(
+                                opportunity_figure_json,
+                                width=1800,
+                                height=1125,
+                                scale=2,
+                            )
+                        st.session_state[png_state_key] = prepared_png
+                        st.success("Chart image is ready to download.")
+                    except Exception as exc:
+                        st.session_state.pop(png_state_key, None)
+                        st.error(
+                            "PNG export could not be prepared. Install Kaleido and "
+                            "make sure Chrome or Chromium is available."
+                        )
+                        st.caption(f"Export detail: {exc}")
+
+                if st.session_state.get(png_state_key) and st.session_state.get(signature_state_key) == opportunity_signature:
+                    matrix_view_slug = (
+                        "commodities"
+                        if matrix_lens == "Commodity groups"
+                        else "partner_markets"
+                    )
+                    matrix_flow_slug = re.sub(
+                        r"[^a-z0-9]+",
+                        "_",
+                        matrix_flow.lower(),
+                    ).strip("_")
+                    st.download_button(
+                        "Download opportunity matrix (PNG)",
+                        data=st.session_state[png_state_key],
+                        file_name=(
+                            f"petrotrade_opportunity_matrix_{matrix_view_slug}_"
+                            f"{selected_year}_{matrix_flow_slug}.png"
+                        ),
+                        mime="image/png",
+                        key="download_opportunity_matrix_png",
+                        help="Download the prepared high-resolution chart image.",
+                    )
+
         with chart_right:
             section(
                 "HOW TO INTERPRET",
@@ -3291,6 +3373,7 @@ else:
 - **Partial year:** year-on-year comparison uses the months common to all loaded flows in the selected year and the same months from the prior year.
 - **Scope limitation:** these are broad HS chapters related to petroleum, chemicals, plastics and rubber. They are not an exact list of every petrochemical product.
 - **Market Opportunity Matrix:** current value is compared with same-month prior-year value. Entities with a positive prior-period denominator receive a year-on-year rate. The horizontal divider is user-selected; the vertical divider is the median current value within the assessed selection. Quadrants are relative screening labels, not recommendations.
+- **Chart image export:** the Opportunity Matrix can be downloaded as a high-resolution PNG. Static image export uses Plotly and Kaleido; Kaleido 1.x also requires Chrome or Chromium.
 - **Interpretation:** trends and concentration measures describe this dataset; they do not establish the causes behind a change or forecast future values.
     """)
 
