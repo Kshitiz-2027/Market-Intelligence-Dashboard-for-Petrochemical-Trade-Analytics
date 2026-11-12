@@ -207,7 +207,7 @@ button[kind="primary"]:hover { background:#C95C3B !important; border-color:#C95C
 .section-note { font-size:.88rem; line-height:1.58; color:#68727D; margin:0 0 .9rem; }
 .kpi-card { background:#FFFEFC; border:1px solid #E3DED4; border-top:3px solid #E46F4A; border-radius:10px 18px 10px 18px; padding:1.1rem 1.15rem 1rem; min-height:128px; box-shadow:0 4px 12px rgba(23,42,58,.035); animation:fadeSlideIn .32s ease both; transition:transform .2s ease,box-shadow .2s ease; }
 .kpi-card:hover { transform:translateY(-3px); box-shadow:0 12px 25px rgba(23,42,58,.09); }
-.kpi-label { color:#68727D; font-size:.75rem; font-weight:750; margin-bottom:.52rem; letter-spacing:.045em; }
+.kpi-label { color:#68727D; font-size:.75rem; font-weight:750; margin-bottom:.52rem; letter-spacing:.045em; cursor:help; text-decoration:underline dotted #A9A39A; text-underline-offset:3px; }
 .kpi-value { color:#172A3A; font-family:'Space Grotesk','DM Sans',sans-serif; font-size:1.82rem; line-height:1.1; letter-spacing:-.045em; font-weight:700; }
 .kpi-foot { color:#737C84; font-size:.76rem; margin-top:.6rem; line-height:1.4; }
 .insight-grid-card { background:#FFFEFC; border:1px solid #E3DED4; border-radius:10px 16px 10px 16px; padding:1rem; min-height:118px; box-shadow:0 2px 8px rgba(23,42,58,.025); animation:fadeSlideIn .32s ease both; transition:transform .18s ease,box-shadow .18s ease; }
@@ -410,9 +410,13 @@ def section(kicker, title, note=""):
 
 
 def kpi_card(label, value, foot, accent=TEAL):
+    # The tooltip reuses the KPI's existing supporting text for a quick explanation.
+    tooltip = f"{label}. {foot}" if foot else label
+
     st.markdown(
-        f"<div class='kpi-card' style='border-top-color:{accent}'>"
-        f"<div class='kpi-label'>{safe(label)}</div>"
+        f"<div class='kpi-card' style='border-top-color:{safe(accent)}'>"
+        f"<div class='kpi-label' title='{safe(tooltip)}' "
+        f"aria-label='{safe(tooltip)}'>{safe(label)} ⓘ</div>"
         f"<div class='kpi-value'>{safe(value)}</div>"
         f"<div class='kpi-foot'>{safe(foot)}</div></div>",
         unsafe_allow_html=True,
