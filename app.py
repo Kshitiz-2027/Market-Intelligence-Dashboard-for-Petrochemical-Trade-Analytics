@@ -593,9 +593,7 @@ def build_excel_report(
     filtered_records,
     metadata
 ):
-    """
-    Generate a multi-sheet PetroTrade analytics workbook.
-    """
+    """Generate a formatted multi-sheet PetroTrade analytics workbook."""
 
     output = BytesIO()
 
@@ -635,20 +633,11 @@ def build_excel_report(
     )
 
     commodity_summary["YoY change (%)"] = np.nan
-
-    valid = (
-        commodity_summary["Comparable prior value (USD Mn)"] > 0
-    )
-
-    commodity_summary.loc[
-        valid, "YoY change (%)"
-    ] = (
-        commodity_summary.loc[
-            valid, "Current value (USD Mn)"
-        ]
-        / commodity_summary.loc[
-            valid, "Comparable prior value (USD Mn)"
-        ] - 1
+    valid = commodity_summary["Comparable prior value (USD Mn)"].gt(0)
+    commodity_summary.loc[valid, "YoY change (%)"] = (
+        commodity_summary.loc[valid, "Current value (USD Mn)"]
+        / commodity_summary.loc[valid, "Comparable prior value (USD Mn)"]
+        - 1
     ) * 100
 
     # ---------------------------------------------------------
@@ -656,22 +645,15 @@ def build_excel_report(
     # ---------------------------------------------------------
 
     valid_partners = named_rows(current_data)
-
     partner_summary = (
         valid_partners
-        .groupby(
-            ["DisplayCountry", "Trade Flow"],
-            as_index=False
-        )["Value_USD_Mn"]
+        .groupby(["DisplayCountry", "Trade Flow"], as_index=False)["Value_USD_Mn"]
         .sum()
         .rename(columns={
             "DisplayCountry": "Partner market",
             "Value_USD_Mn": "Recorded value (USD Mn)"
         })
-        .sort_values(
-            "Recorded value (USD Mn)",
-            ascending=False
-        )
+        .sort_values("Recorded value (USD Mn)", ascending=False)
     )
 
     # ---------------------------------------------------------
@@ -682,9 +664,7 @@ def build_excel_report(
         current_data
         .groupby("Trade Flow", as_index=False)["Value_USD_Mn"]
         .sum()
-        .rename(columns={
-            "Value_USD_Mn": "Recorded value (USD Mn)"
-        })
+        .rename(columns={"Value_USD_Mn": "Recorded value (USD Mn)"})
     )
 
     # ---------------------------------------------------------
@@ -693,14 +673,9 @@ def build_excel_report(
 
     monthly_summary = (
         current_data
-        .groupby(
-            ["MonthNum", "Month", "Commodity", "Trade Flow"],
-            as_index=False
-        )["Value_USD_Mn"]
+        .groupby(["MonthNum", "Month", "Commodity", "Trade Flow"], as_index=False)["Value_USD_Mn"]
         .sum()
-        .sort_values(
-            ["MonthNum", "Commodity", "Trade Flow"]
-        )
+        .sort_values(["MonthNum", "Commodity", "Trade Flow"])
     )
 
     # ---------------------------------------------------------
@@ -713,143 +688,145 @@ def build_excel_report(
     )
 
     # ---------------------------------------------------------
-    # 6. WRITE EXCEL WORKBOOK
+    # 6. WORKBOOK GUIDE (NEW ENHANCEMENT)
     # ---------------------------------------------------------
 
-    with pd.ExcelWriter(
-        output,
-        engine="openpyxl"
-    ) as writer:
+    workbook_guide = pd.DataFrame(
+        [
+            ("How to use", "Start here", "This sheet explains the workbook tabs, key measures and colour cues."),
+            ("Workbook tabs", "Executive Summary", "Selected reporting scope, headline totals, comparison figures and source metadata."),
+            ("Workbook tabs", "Commodity Summary", "Current and comparable prior values, grouped by HS code, commodity and trade flow."),
+            ("Workbook tabs", "Partner Markets", "Recorded trade value by partner market and trade flow, sorted from highest to lowest value."),
+            ("Workbook tabs", "Trade Flow Summary", "Recorded value grouped by the trade-flow label available in the loaded data."),
+            ("Workbook tabs", "Monthly Trends", "Monthly value totals by commodity and trade flow, with month number retained for sorting."),
+            ("Workbook tabs", "Filtered Records", "Source observations remaining after the current app filters are applied."),
+            ("Key measure", "YoY change (%)", "Calculated as (current value / comparable prior value - 1) × 100. A value is shown only when the comparable prior value is greater than zero."),
+            ("Units", "USD Mn", "Values are expressed in US$ million where the column heading says USD Mn."),
+            ("Units", "US$ B", "Values are expressed in US$ billion where the column heading says US$ B."),
+            ("Comparison", "Comparable prior period", "The app compares the selected months with the same months in the prior year; check the Executive Summary for the selected reporting period."),
+            ("Trade direction", "Direction not verified", "This label is retained when the source data has not been confirmed as imports or exports. It should not be interpreted as either flow."),
+            ("Colour cue", "Green YoY cell", "Positive year-on-year change."),
+            ("Colour cue", "Red YoY cell", "Negative year-on-year change."),
+            ("Colour cue", "Blank YoY cell", "No comparable positive prior-period value was available; blank does not mean zero change."),
+            ("Interpretation", "Scope", "Commodity groups are based on the HS chapters selected in the app. They are broad analytical groupings, not a complete product-level definition of petrochemicals."),
+        ],
+        columns=["Section", "Field / sheet", "Explanation"]
+    )
 
-        executive_summary.to_excel(
-            writer,
-            sheet_name="Executive Summary",
-            index=False
-        )
+    # ---------------------------------------------------------
+    # 7. WRITE EXCEL WORKBOOK
+    # ---------------------------------------------------------
 
-        commodity_summary.to_excel(
-            writer,
-            sheet_name="Commodity Summary",
-            index=False
-        )
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
 
-        partner_summary.to_excel(
-            writer,
-            sheet_name="Partner Markets",
-            index=False
-        )
-
-        flow_summary.to_excel(
-            writer,
-            sheet_name="Trade Flow Summary",
-            index=False
-        )
-
-        monthly_summary.to_excel(
-            writer,
-            sheet_name="Monthly Trends",
-            index=False
-        )
-
-        filtered_records.to_excel(
-            writer,
-            sheet_name="Filtered Records",
-            index=False
-        )
+        # Put the guide first so the workbook is self-explanatory when opened.
+        workbook_guide.to_excel(writer, sheet_name="Workbook Guide", index=False)
+        executive_summary.to_excel(writer, sheet_name="Executive Summary", index=False)
+        commodity_summary.to_excel(writer, sheet_name="Commodity Summary", index=False)
+        partner_summary.to_excel(writer, sheet_name="Partner Markets", index=False)
+        flow_summary.to_excel(writer, sheet_name="Trade Flow Summary", index=False)
+        monthly_summary.to_excel(writer, sheet_name="Monthly Trends", index=False)
+        filtered_records.to_excel(writer, sheet_name="Filtered Records", index=False)
 
         # -----------------------------------------------------
         # WORKBOOK FORMATTING
         # -----------------------------------------------------
 
-        from openpyxl.styles import (
-            Font,
-            PatternFill,
-            Border,
-            Side,
-            Alignment
-        )
+        from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+        from openpyxl.formatting.rule import CellIsRule
 
-        header_fill = PatternFill(
-            fill_type="solid",
-            fgColor="172A3A"
-        )
-
-        header_font = Font(
-            bold=True,
-            color="FFFFFF",
-            size=10
-        )
-
-        thin_border = Border(
-            bottom=Side(
-                style="thin",
-                color="D9DDE3"
-            )
-        )
+        header_fill = PatternFill(fill_type="solid", fgColor="172A3A")
+        header_font = Font(bold=True, color="FFFFFF", size=10)
+        positive_fill = PatternFill(fill_type="solid", fgColor="E2F0D9")
+        negative_fill = PatternFill(fill_type="solid", fgColor="FCE4D6")
+        thin_border = Border(bottom=Side(style="thin", color="D9DDE3"))
 
         for worksheet in writer.book.worksheets:
-
             worksheet.freeze_panes = "A2"
 
-            if worksheet.max_row >= 1:
+            if worksheet.max_row >= 1 and worksheet.max_column >= 1:
                 worksheet.auto_filter.ref = worksheet.dimensions
 
-            # Format header row.
             for cell in worksheet[1]:
                 cell.fill = header_fill
                 cell.font = header_font
                 cell.alignment = Alignment(
                     horizontal="center",
-                    vertical="center"
+                    vertical="center",
+                    wrap_text=True
                 )
 
-            worksheet.row_dimensions[1].height = 24
+            worksheet.row_dimensions[1].height = 26
 
-            # Adjust column widths and numeric formats.
             headers = {
                 cell.column: str(cell.value)
                 for cell in worksheet[1]
             }
 
             for col_index, header in headers.items():
-
-                column_letter = worksheet.cell(
-                    row=1,
-                    column=col_index
-                ).column_letter
+                column_letter = worksheet.cell(row=1, column=col_index).column_letter
 
                 max_length = max(
                     len(str(worksheet.cell(row=row, column=col_index).value or ""))
                     for row in range(1, worksheet.max_row + 1)
                 )
 
-                worksheet.column_dimensions[
-                    column_letter
-                ].width = min(
+                worksheet.column_dimensions[column_letter].width = min(
                     max(max_length + 3, 13),
                     42
                 )
 
                 for row in range(2, worksheet.max_row + 1):
-                    cell = worksheet.cell(
-                        row=row,
-                        column=col_index
-                    )
-
+                    cell = worksheet.cell(row=row, column=col_index)
                     cell.border = thin_border
+                    cell.alignment = Alignment(vertical="top")
 
                     if "(USD Mn)" in header or "(US$ million)" in header:
                         cell.number_format = '#,##0.00;[Red]-#,##0.00'
-
                     elif "(US$ B)" in header:
-                        cell.number_format = '0.000'
-
+                        cell.number_format = '#,##0.000;[Red]-#,##0.000'
                     elif "(%)" in header:
-                        # Percent values are stored as 11.5, not 0.115.
+                        # Percentage values are stored as 11.5, not 0.115.
                         cell.number_format = '0.0"%"'
 
-    output.seek(0)
+                # Highlight positive and negative year-on-year changes in Excel.
+                header_lower = header.lower()
+                is_growth_column = (
+                    "(%)" in header
+                    and ("yoy" in header_lower or "year-on-year" in header_lower)
+                )
+                if is_growth_column and worksheet.max_row >= 2:
+                    data_range = (
+                        f"{column_letter}2:{column_letter}{worksheet.max_row}"
+                    )
+                    worksheet.conditional_formatting.add(
+                        data_range,
+                        CellIsRule(
+                            operator="greaterThan",
+                            formula=["0"],
+                            fill=positive_fill
+                        )
+                    )
+                    worksheet.conditional_formatting.add(
+                        data_range,
+                        CellIsRule(
+                            operator="lessThan",
+                            formula=["0"],
+                            fill=negative_fill
+                        )
+                    )
 
+        # Make the guide comfortable to read without excessively wide columns.
+        guide_sheet = writer.book["Workbook Guide"]
+        guide_sheet.column_dimensions["A"].width = 20
+        guide_sheet.column_dimensions["B"].width = 30
+        guide_sheet.column_dimensions["C"].width = 92
+        for row in range(2, guide_sheet.max_row + 1):
+            guide_sheet.row_dimensions[row].height = 32
+            for cell in guide_sheet[row]:
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+
+    output.seek(0)
     return output.getvalue()
 
 
@@ -3437,8 +3414,8 @@ else:
 
     st.caption(
         "Download the current analytical scope across multiple "
-        "worksheets, including commodity summaries, partner markets, "
-        "monthly trends and filtered source records."
+        "worksheets. The workbook now opens with a guide to the tabs "
+        "and highlights positive and negative year-on-year changes."
     )
 
     st.download_button(
