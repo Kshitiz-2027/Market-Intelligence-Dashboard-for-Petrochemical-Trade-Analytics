@@ -1593,7 +1593,7 @@ elif page == "Commodity breakdown":
         if col in display_ledger.columns:
             display_ledger[col] = display_ledger[col].map(fmt_pct)
     st.dataframe(display_ledger, use_container_width=True, hide_index=True, height=compact_height(len(display_ledger), max_height=360))
-    st.download_button("Download commodity ledger", ledger.to_csv(index=False).encode("utf-8"), file_name=f"petrotrade_commodity_ledger_{selected_year}.csv", mime="text/csv")
+    st.download_button("Download commodity ledger", ledger.to_csv(index=False).encode("utf-8-sig"), file_name=f"petrotrade_commodity_ledger_{selected_year}.csv", mime="text/csv")
 
     # ============================================================
     # COMMIT 04: COMMODITY COMPARISON ANALYSIS
@@ -2035,7 +2035,7 @@ elif page == "Commodity breakdown":
                 "Download commodity comparison as CSV",
                 data=display_comparison.to_csv(
                     index=False
-                ).encode("utf-8"),
+                ).encode("utf-8-sig"),
                 file_name=(
                     f"petrotrade_comparison_{selected_year}.csv"
                 ),
@@ -2424,7 +2424,7 @@ elif page == "Commodity deep dive":
                 },
             )
 
-            deep_export = deep_table.to_csv(index=False).encode("utf-8")
+            deep_export = deep_table.to_csv(index=False).encode("utf-8-sig")
 
             st.download_button(
                 "Download commodity partner profile as CSV",
@@ -2812,7 +2812,7 @@ elif page == "Market opportunity matrix":
         )
         st.download_button(
             "Download opportunity matrix as CSV",
-            data=display_matrix.to_csv(index=False).encode("utf-8"),
+            data=display_matrix.to_csv(index=False).encode("utf-8-sig"),
             file_name=f"petrotrade_opportunity_matrix_{selected_year}.csv",
             mime="text/csv",
             type="primary",
@@ -3126,7 +3126,7 @@ elif page == "Concentration & risk":
         )
         st.download_button(
             "Download concentration & risk register as CSV",
-            data=risk_display.to_csv(index=False).encode("utf-8"),
+            data=risk_display.to_csv(index=False).encode("utf-8-sig"),
             file_name=f"petrotrade_concentration_risk_{selected_year}.csv",
             mime="text/csv",
             type="primary",
@@ -3372,7 +3372,7 @@ else:
     )
     st.download_button(
         "Download filtered data as CSV",
-        data=table.to_csv(index=False).encode("utf-8"),
+        data=table.to_csv(index=False).encode("utf-8-sig"),
         file_name=f"petrotrade_{selected_year}_filtered.csv",
         mime="text/csv",
         type="primary",
