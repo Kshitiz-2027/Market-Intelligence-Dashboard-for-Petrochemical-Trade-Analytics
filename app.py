@@ -3327,12 +3327,16 @@ else:
         table = table[mask]
     table = table.sort_values("Value (US$ million)", ascending=False)
 
-    a, b, c = st.columns(3, gap="medium")
+    a, b, c, d = st.columns(4, gap="medium")
     with a:
         kpi_card("ROWS IN CURRENT VIEW", f"{len(table):,}", "After year, commodity and search filters", TEAL)
     with b:
-        kpi_card("SOURCE YEARS", f"{min(years)}–{max(years)}", "Available reporting years", "#365B78")
+        filtered_value_bn = table["Value (US$ million)"].sum() / 1000
+        filtered_value_label = f"${filtered_value_bn:,.2f}B" if not table.empty else "—"
+        kpi_card("VALUE IN CURRENT VIEW", filtered_value_label, "Combined value of the filtered records", GREEN)
     with c:
+        kpi_card("SOURCE YEARS", f"{min(years)}–{max(years)}", "Available reporting years", "#365B78")
+    with d:
         latest_date = data["Date"].max()
         kpi_card("LATEST SOURCE MONTH", latest_date.strftime("%b %Y"), "Latest date present in loaded data", "#E0B15A")
 
