@@ -3364,22 +3364,44 @@ else:
 
     st.write("")
     section("FILTERED RECORDS", "Browse the source observations", f"Showing {len(table):,} filtered rows for the selected period and commodity groups.")
-    st.dataframe(
-        table,
-        use_container_width=True,
-        hide_index=True,
-        height=480,
-        column_config={
-            "Date": st.column_config.DateColumn("Month", format="MMM YYYY"),
-            "Value (US$ million)": st.column_config.NumberColumn("Value (US$ million)", format="%.3f"),
-        },
-    )
+    # ============================================================
+    # COMMIT 10: FRIENDLY EMPTY STATE FOR FILTERED RECORDS
+    # ============================================================
+    if table.empty:
+        empty_state(
+            "No matching records found",
+            (
+                f"No records match '{search.strip()}' in the current reporting "
+                "period and commodity selection."
+                if search.strip()
+                else "There are no records available for the current selection."
+            ),
+            "Try another country, commodity, category or HS code, or clear the search field.",
+        )
+    else:
+        st.dataframe(
+            table,
+            use_container_width=True,
+            hide_index=True,
+            height=480,
+            column_config={
+                "Date": st.column_config.DateColumn("Month", format="MMM YYYY"),
+                "Value (US$ million)": st.column_config.NumberColumn("Value (US$ million)", format="%.3f"),
+            },
+        )
+
     st.download_button(
         "Download filtered data as CSV",
         data=table.to_csv(index=False).encode("utf-8-sig"),
         file_name=f"petrotrade_{selected_year}_filtered.csv",
         mime="text/csv",
         type="primary",
+        disabled=table.empty,
+        help=(
+            "No matching records are available to download."
+            if table.empty
+            else "Download the records currently shown in the filtered table."
+        ),
     )
 
     # ============================================================
