@@ -3379,8 +3379,21 @@ else:
             "Try another country, commodity, category or HS code, or clear the search field.",
         )
     else:
+        # COMMIT 11: LIMIT THE ON-SCREEN PREVIEW WITHOUT LIMITING THE EXPORT
+        row_limit = st.selectbox(
+            "Maximum rows to display",
+            options=[25, 50, 100, 250, "All"],
+            index=2,
+            key="filtered_records_display_limit",
+            help="This controls the table preview only. The CSV download still includes every matching record.",
+        )
+        display_table = table if row_limit == "All" else table.head(int(row_limit))
+        st.caption(
+            f"Displaying {len(display_table):,} of {len(table):,} matching records. "
+            "The CSV download includes all matching records."
+        )
         st.dataframe(
-            table,
+            display_table,
             use_container_width=True,
             hide_index=True,
             height=480,
