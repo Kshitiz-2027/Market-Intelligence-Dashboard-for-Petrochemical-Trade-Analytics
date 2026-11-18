@@ -3325,8 +3325,6 @@ else:
         for col in searchable:
             mask = mask | table[col].astype(str).str.casefold().str.contains(query, na=False)
         table = table[mask]
-    table = table.sort_values("Value (US$ million)", ascending=False)
-
     a, b, c, d = st.columns(4, gap="medium")
     with a:
         kpi_card("ROWS IN CURRENT VIEW", f"{len(table):,}", "After year, commodity and search filters", TEAL)
@@ -3379,14 +3377,48 @@ else:
             "Try another country, commodity, category or HS code, or clear the search field.",
         )
     else:
-        # COMMIT 11: LIMIT THE ON-SCREEN PREVIEW WITHOUT LIMITING THE EXPORT
-        row_limit = st.selectbox(
-            "Maximum rows to display",
-            options=[25, 50, 100, 250, "All"],
-            index=2,
-            key="filtered_records_display_limit",
-            help="This controls the table preview only. The CSV download still includes every matching record.",
+        # COMMIT 12: ALLOW USERS TO SORT THE FILTERED RECORDS
+        sort_col, limit_col = st.columns(2, gap="medium")
+        with sort_col:
+            sort_choice = st.selectbox(
+                "Sort records by",
+                options=[
+                    "Highest trade value",
+                    "Lowest trade value",
+                    "Latest month",
+                    "Oldest month",
+                    "Country (A–Z)",
+                    "Commodity (A–Z)",
+                ],
+                index=0,
+                key="filtered_records_sort_order",
+                help="The selected order is applied to both the table preview and CSV download.",
+            )
+        sort_rules = {
+            "Highest trade value": ("Value (US$ million)", False),
+            "Lowest trade value": ("Value (US$ million)", True),
+            "Latest month": ("Date", False),
+            "Oldest month": ("Date", True),
+            "Country (A–Z)": ("Country Name", True),
+            "Commodity (A–Z)": ("Commodity", True),
+        }
+        sort_column, sort_ascending = sort_rules[sort_choice]
+        table = table.sort_values(
+            by=sort_column,
+            ascending=sort_ascending,
+            kind="stable",
+            na_position="last",
         )
+
+        # COMMIT 11: LIMIT THE ON-SCREEN PREVIEW WITHOUT LIMITING THE EXPORT
+        with limit_col:
+            row_limit = st.selectbox(
+                "Maximum rows to display",
+                options=[25, 50, 100, 250, "All"],
+                index=2,
+                key="filtered_records_display_limit",
+                help="This controls the table preview only. The CSV download still includes every matching record.",
+            )
         display_table = table if row_limit == "All" else table.head(int(row_limit))
         st.caption(
             f"Displaying {len(display_table):,} of {len(table):,} matching records. "
@@ -3413,7 +3445,7 @@ else:
         help=(
             "No matching records are available to download."
             if table.empty
-            else "Download the records currently shown in the filtered table."
+            else "Download every matching record in the selected sort order, not just the visible preview."
         ),
     )
 
