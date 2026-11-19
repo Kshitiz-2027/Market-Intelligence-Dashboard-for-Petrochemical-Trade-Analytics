@@ -74,7 +74,6 @@ RED = "#C84F4F"
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 :root { color-scheme: light; }
 html, body, [class*="css"], [data-testid="stAppViewContainer"] {
   font-family: 'DM Sans', 'Segoe UI', sans-serif !important;
@@ -286,6 +285,212 @@ hr { border-color:#E3DED4; }
 @keyframes chartEnter { from { opacity:.35; transform:translateY(8px) scale(.996); } to { opacity:1; transform:translateY(0) scale(1); } }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; } }
 @media (max-width:900px) { .hero .hero-title { font-size:1.85rem; } .kpi-value { font-size:1.48rem; } }
+
+/* COMMIT 13: CLEAN WHITE THEME AND SIMPLE SYSTEM TYPOGRAPHY */
+:root {
+  color-scheme: light;
+  --pt-page: #FFFFFF;
+  --pt-panel: #FFFFFF;
+  --pt-soft: #F8FAFC;
+  --pt-border: #E5E7EB;
+  --pt-text: #1F2937;
+  --pt-muted: #6B7280;
+  --pt-accent: #D96B45;
+  --pt-accent-soft: #FFF1EB;
+}
+html, body, [class*="css"], [data-testid="stAppViewContainer"],
+[data-testid="stMarkdownContainer"], input, textarea, button, label {
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+[data-testid="stAppViewContainer"], .main, section.main {
+  background: var(--pt-page) !important;
+  color: var(--pt-text) !important;
+}
+[data-testid="stHeader"] { background: #FFFFFF !important; }
+[data-testid="stSidebar"] {
+  background: #FFFFFF !important;
+  border-right: 1px solid var(--pt-border) !important;
+}
+[data-testid="stSidebar"] > div { background: #FFFFFF !important; }
+.block-container { padding-top: 1.2rem; padding-bottom: 2.5rem; }
+h1, h2, h3, h4, h5, h6,
+.hero-title, .section-title, .control-deck-title,
+.landing-title, .landing-stat-value, .landing-section-title,
+.landing-workflow-num, .workspace-monogram, .workspace-brandname,
+.workspace-current-title, .kpi-value {
+  font-family: Arial, Helvetica, sans-serif !important;
+  letter-spacing: normal !important;
+}
+h1, h2, h3, h4, h5, h6 { color: var(--pt-text) !important; }
+
+/* Plain white welcome panel instead of a dark gradient hero. */
+.landing-hero {
+  background: #FFFFFF !important;
+  color: var(--pt-text) !important;
+  border: 1px solid var(--pt-border) !important;
+  border-left: 4px solid var(--pt-accent) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 3px 12px rgba(31, 41, 55, .04) !important;
+  animation: none !important;
+}
+.landing-hero:before { display: none !important; }
+.landing-brand, .landing-brand-mark { color: var(--pt-text) !important; }
+.landing-brand-mark {
+  background: var(--pt-accent-soft) !important;
+  color: var(--pt-accent) !important;
+  border: 1px solid #F5D6C9 !important;
+  border-radius: 8px !important;
+}
+.landing-brand small, .landing-top-status,
+.landing-copy, .landing-stat-foot, .landing-section-copy,
+.landing-feature-copy, .landing-workflow-copy,
+.landing-bottom { color: var(--pt-muted) !important; }
+.landing-kicker, .landing-aside-title,
+.landing-workflow-num { color: var(--pt-accent) !important; }
+.landing-title { color: var(--pt-text) !important; font-size: clamp(2rem, 4vw, 3.2rem) !important; line-height: 1.12 !important; }
+.landing-title span { color: var(--pt-accent) !important; }
+.landing-aside {
+  background: var(--pt-soft) !important;
+  border: 1px solid var(--pt-border) !important;
+  border-radius: 10px !important;
+  backdrop-filter: none !important;
+}
+.landing-question { border-bottom-color: var(--pt-border) !important; }
+.landing-question-title { color: var(--pt-text) !important; }
+.landing-question-copy { color: var(--pt-muted) !important; }
+.landing-chip {
+  background: var(--pt-soft) !important;
+  border: 1px solid var(--pt-border) !important;
+  color: #4B5563 !important;
+  border-radius: 6px !important;
+}
+.landing-stat, .landing-feature, .landing-workflow {
+  background: #FFFFFF !important;
+  border: 1px solid var(--pt-border) !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+.landing-feature:hover { transform: none !important; box-shadow: 0 4px 12px rgba(31,41,55,.06) !important; border-color: #D1D5DB !important; }
+.landing-feature-icon { background: var(--pt-accent-soft) !important; color: var(--pt-accent) !important; }
+.landing-stat-label, .landing-workflow-title, .landing-feature-title,
+.landing-section-title { color: var(--pt-text) !important; }
+.landing-stat-value { color: var(--pt-text) !important; }
+.landing-footnote { background: #FFFBEB !important; border-color: #FDE68A !important; color: #78350F !important; }
+
+/* White page headers and content cards. */
+.workspace-masthead { border-bottom-color: var(--pt-border) !important; }
+.workspace-monogram {
+  background: var(--pt-accent-soft) !important;
+  color: var(--pt-accent) !important;
+  border: 1px solid #F5D6C9 !important;
+  border-radius: 9px !important;
+}
+.workspace-brandname, .workspace-current-title { color: var(--pt-text) !important; }
+.workspace-brandname span, .workspace-overline,
+.workspace-current-label, .navbar-kicker,
+.section-kicker { color: var(--pt-accent) !important; }
+.workspace-current-copy, .navbar-hint, .section-note { color: var(--pt-muted) !important; }
+.hero {
+  background: #FFFFFF !important;
+  color: var(--pt-text) !important;
+  border: 1px solid var(--pt-border) !important;
+  border-left: 4px solid var(--pt-accent) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+.hero .hero-eyebrow { color: var(--pt-accent) !important; }
+.hero .hero-title { color: var(--pt-text) !important; font-size: 2rem !important; }
+.hero .hero-sub { color: #4B5563 !important; }
+.hero-chip {
+  background: var(--pt-soft) !important;
+  border: 1px solid var(--pt-border) !important;
+  color: #4B5563 !important;
+}
+.navbar-divider, hr { border-color: var(--pt-border) !important; background: var(--pt-border) !important; }
+
+/* Simpler buttons, form controls, and neutral content surfaces. */
+div[data-testid="stButton"] > button {
+  background: #FFFFFF !important;
+  color: #374151 !important;
+  border: 1px solid #D1D5DB !important;
+  border-radius: 7px !important;
+  box-shadow: none !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-weight: 600 !important;
+  transition: background .15s ease, border-color .15s ease !important;
+}
+div[data-testid="stButton"] > button:hover {
+  background: #F9FAFB !important;
+  color: var(--pt-text) !important;
+  border-color: #9CA3AF !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+div[data-testid="stButton"] > button[kind="primary"],
+button[kind="primary"] {
+  background: var(--pt-accent) !important;
+  border-color: var(--pt-accent) !important;
+  color: #FFFFFF !important;
+}
+div[data-testid="stButton"] > button[kind="primary"]:hover,
+button[kind="primary"]:hover {
+  background: #C85B37 !important;
+  border-color: #C85B37 !important;
+  color: #FFFFFF !important;
+}
+[data-baseweb="select"] > div, [data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input, [data-testid="stTextArea"] textarea {
+  background: #FFFFFF !important;
+  border-color: #D1D5DB !important;
+  border-radius: 7px !important;
+  color: var(--pt-text) !important;
+}
+[data-baseweb="tag"] { background: var(--pt-accent) !important; }
+[data-testid="stForm"], [data-testid="stExpander"] {
+  background: #FFFFFF !important;
+  border: 1px solid var(--pt-border) !important;
+  border-radius: 9px !important;
+}
+[data-testid="stExpander"] details { background: #FFFFFF !important; }
+[data-testid="stDataFrame"], [data-testid="stTable"] {
+  border: 1px solid var(--pt-border) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+}
+.kpi-card, .insight-grid-card, div[data-testid="stPlotlyChart"] {
+  background: #FFFFFF !important;
+  border-color: var(--pt-border) !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+.kpi-card:hover, .insight-grid-card:hover, div[data-testid="stPlotlyChart"]:hover {
+  transform: none !important;
+  box-shadow: 0 3px 10px rgba(31,41,55,.05) !important;
+}
+.kpi-label, .insight-label, .landing-stat-label { color: var(--pt-muted) !important; }
+.kpi-value, .insight-text, .section-title, .control-deck-title { color: var(--pt-text) !important; }
+.kpi-foot, .panel-note, .control-deck-sub { color: var(--pt-muted) !important; }
+.control-deck { background: #FFFFFF !important; border-color: var(--pt-border) !important; border-radius: 9px !important; box-shadow: none !important; }
+.scope-strip { background: var(--pt-soft) !important; border-color: var(--pt-border) !important; color: #4B5563 !important; }
+.scope-pill { background: #FFFFFF !important; border-color: var(--pt-border) !important; color: #374151 !important; }
+.info-panel { background: #F8FAFC !important; border-color: var(--pt-border) !important; border-left-color: var(--pt-accent) !important; color: #4B5563 !important; }
+.info-panel b { color: var(--pt-text) !important; }
+.empty-state { background: #FFFFFF !important; border-color: #D1D5DB !important; border-left-color: var(--pt-accent) !important; box-shadow: none !important; }
+.empty-state-title { color: var(--pt-text) !important; }
+.empty-state-message { color: var(--pt-muted) !important; }
+.empty-state-mark { background: var(--pt-accent-soft) !important; color: var(--pt-accent) !important; }
+.callout { background: #FFFBEB !important; border-color: #FDE68A !important; color: #78350F !important; }
+button:focus-visible, [data-baseweb="select"] > div:focus-within,
+[data-testid="stTextInput"] input:focus-visible {
+  outline: 2px solid var(--pt-accent) !important;
+  outline-offset: 2px !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -471,14 +676,14 @@ def style_fig(fig, height=360, legend=True):
         margin=dict(l=18, r=28, t=40, b=24),
         paper_bgcolor="rgba(255,255,255,0)",
         plot_bgcolor="rgba(255,255,255,0)",
-        font=dict(family="DM Sans, Segoe UI, sans-serif", color="#53616D", size=12),
-        hoverlabel=dict(bgcolor="#172A3A", font_color="#FFFFFF", bordercolor="#172A3A"),
-        legend=dict(font=dict(color="#53616D", size=11), bgcolor="rgba(255,255,255,0)"),
+        font=dict(family="Arial, Helvetica, sans-serif", color="#4B5563", size=12),
+        hoverlabel=dict(bgcolor="#FFFFFF", font_color="#1F2937", bordercolor="#D1D5DB"),
+        legend=dict(font=dict(color="#4B5563", size=11), bgcolor="rgba(255,255,255,0)"),
         showlegend=legend,
         transition=dict(duration=260, easing="cubic-in-out"),
     )
-    fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#D8D2C7", ticks="outside")
-    fig.update_yaxes(showgrid=True, gridcolor="#ECE8E0", zeroline=False, linecolor="#D8D2C7", ticks="outside")
+    fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#D1D5DB", ticks="outside")
+    fig.update_yaxes(showgrid=True, gridcolor="#F1F3F5", zeroline=False, linecolor="#D1D5DB", ticks="outside")
     return fig
 
 
