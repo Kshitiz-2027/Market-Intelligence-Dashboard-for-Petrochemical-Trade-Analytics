@@ -65,15 +65,16 @@ EXCLUDED_MARKETS = {
     "TOTAL", "ALL COUNTRIES", "WORLD TOTAL", "UNSPECIFIED", "NOT SPECIFIED", "OTHERS", "OTHER", ""
 }
 FLOW_NAMES = ["Imports", "Exports", "Direction not verified"]
-PALETTE = ["#E46F4A", "#365B78", "#6E9F93", "#E0B15A", "#83919B", "#8E83B8"]
-TEAL = "#E46F4A"
-NAVY = "#172A3A"
-SLATE = "#68727D"
-GREEN = "#23745B"
-RED = "#C84F4F"
+PALETTE = ["#55D7C4", "#9A8CFF", "#F2B66D", "#6FA7F8", "#D985A5", "#91A8C4"]
+TEAL = "#55D7C4"
+NAVY = "#DCE6F2"
+SLATE = "#91A1B7"
+GREEN = "#36C995"
+RED = "#FF7182"
 
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 :root { color-scheme: light; }
 html, body, [class*="css"], [data-testid="stAppViewContainer"] {
   font-family: 'DM Sans', 'Segoe UI', sans-serif !important;
@@ -286,211 +287,257 @@ hr { border-color:#E3DED4; }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; } }
 @media (max-width:900px) { .hero .hero-title { font-size:1.85rem; } .kpi-value { font-size:1.48rem; } }
 
-/* COMMIT 13: CLEAN WHITE THEME AND SIMPLE SYSTEM TYPOGRAPHY */
+/* COMMIT 14: MODERN DARK VISUAL REFRESH */
 :root {
-  color-scheme: light;
-  --pt-page: #FFFFFF;
-  --pt-panel: #FFFFFF;
-  --pt-soft: #F8FAFC;
-  --pt-border: #E5E7EB;
-  --pt-text: #1F2937;
-  --pt-muted: #6B7280;
-  --pt-accent: #D96B45;
-  --pt-accent-soft: #FFF1EB;
+  color-scheme: dark;
+  --pt-page: #0A1020;
+  --pt-panel: #111C30;
+  --pt-panel-raised: #16243A;
+  --pt-soft: #0E192B;
+  --pt-border: #263750;
+  --pt-text: #E8EEF7;
+  --pt-muted: #91A1B7;
+  --pt-accent: #55D7C4;
+  --pt-accent-strong: #35BFAE;
+  --pt-accent-soft: rgba(85, 215, 196, .12);
+  --pt-violet: #9A8CFF;
 }
 html, body, [class*="css"], [data-testid="stAppViewContainer"],
 [data-testid="stMarkdownContainer"], input, textarea, button, label {
-  font-family: Arial, Helvetica, sans-serif !important;
+  font-family: 'DM Sans', 'Segoe UI', sans-serif !important;
 }
-[data-testid="stAppViewContainer"], .main, section.main {
-  background: var(--pt-page) !important;
+html, body { background: var(--pt-page) !important; color: var(--pt-text) !important; }
+[data-testid="stAppViewContainer"], .main, section.main, [data-testid="stMain"] {
+  background:
+    radial-gradient(ellipse at 8% 0%, rgba(65, 103, 173, .19), transparent 34%),
+    radial-gradient(ellipse at 94% 7%, rgba(119, 89, 194, .13), transparent 30%),
+    linear-gradient(180deg, #0A1020 0%, #0D1728 55%, #0A1221 100%) !important;
   color: var(--pt-text) !important;
 }
-[data-testid="stHeader"] { background: #FFFFFF !important; }
+[data-testid="stHeader"] { background: rgba(10,16,32,.72) !important; }
+[data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
+#MainMenu, footer { visibility: hidden; }
+.block-container { padding-top: 1.15rem; padding-bottom: 3rem; max-width: 1660px; }
 [data-testid="stSidebar"] {
-  background: #FFFFFF !important;
-  border-right: 1px solid var(--pt-border) !important;
+  background: linear-gradient(180deg, #0D182B 0%, #0A1425 100%) !important;
+  border-right: 1px solid #24344D !important;
 }
-[data-testid="stSidebar"] > div { background: #FFFFFF !important; }
-.block-container { padding-top: 1.2rem; padding-bottom: 2.5rem; }
+[data-testid="stSidebar"] > div { background: transparent !important; padding-top: 1.15rem; }
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stSidebar"] label { color: #A8B7C9 !important; }
+[data-testid="stMarkdownContainer"], [data-testid="stText"], p, li { color: #C8D3E2; }
+small, .stCaption, [data-testid="stCaptionContainer"] { color: var(--pt-muted) !important; }
 h1, h2, h3, h4, h5, h6,
 .hero-title, .section-title, .control-deck-title,
 .landing-title, .landing-stat-value, .landing-section-title,
 .landing-workflow-num, .workspace-monogram, .workspace-brandname,
 .workspace-current-title, .kpi-value {
-  font-family: Arial, Helvetica, sans-serif !important;
-  letter-spacing: normal !important;
+  font-family: 'Space Grotesk', 'DM Sans', sans-serif !important;
+  letter-spacing: -.035em !important;
+  color: #F0F5FC !important;
 }
-h1, h2, h3, h4, h5, h6 { color: var(--pt-text) !important; }
+.eyebrow, .landing-kicker, .landing-aside-title, .workspace-overline,
+.workspace-current-label, .navbar-kicker, .section-kicker { color: var(--pt-accent) !important; }
 
-/* Plain white welcome panel instead of a dark gradient hero. */
-.landing-hero {
-  background: #FFFFFF !important;
-  color: var(--pt-text) !important;
-  border: 1px solid var(--pt-border) !important;
+/* Product identity and navigation */
+.landing-shell { color: var(--pt-text); }
+.landing-topline { border-bottom: 1px solid rgba(133,157,190,.17); padding-bottom: .75rem; }
+.landing-brand { color: #F0F5FC !important; }
+.landing-brand-mark, .workspace-monogram {
+  background: linear-gradient(145deg, rgba(85,215,196,.22), rgba(154,140,255,.20)) !important;
+  border: 1px solid rgba(85,215,196,.35) !important;
+  color: #78E7D5 !important;
+  border-radius: 13px !important;
+  box-shadow: 0 8px 24px rgba(29, 191, 174, .10);
+}
+.landing-brand small, .landing-top-status, .workspace-current-copy,
+.navbar-hint, .section-note, .landing-bottom { color: #8FA0B7 !important; }
+.workspace-masthead { border-bottom: 1px solid rgba(133,157,190,.18) !important; }
+.workspace-brandname { color: #F0F5FC !important; }
+.workspace-brandname span { color: var(--pt-accent) !important; }
+.workspace-current-title { color: #EAF1FA !important; }
+.navbar-divider, hr { background: rgba(133,157,190,.2) !important; border-color: rgba(133,157,190,.2) !important; }
+
+/* Welcome hero and in-page page headers */
+.landing-hero, .hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(118deg, #14233B 0%, #1B2D49 52%, #2B3157 100%) !important;
+  color: #F2F6FC !important;
+  border: 1px solid rgba(125,153,191,.22) !important;
   border-left: 4px solid var(--pt-accent) !important;
+  border-radius: 18px 30px 18px 30px !important;
+  box-shadow: 0 20px 55px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.04) !important;
+  animation: fadeSlideIn .38s ease both !important;
+}
+.landing-hero:before {
+  display: block !important;
+  border-color: rgba(85,215,196,.24) !important;
+  box-shadow: 0 0 0 42px rgba(85,215,196,.035), 0 0 0 90px rgba(154,140,255,.035) !important;
+}
+.landing-title { color: #F5F8FD !important; font-size: clamp(2.45rem, 4.9vw, 4.55rem) !important; line-height: 1.02 !important; }
+.landing-title span, .landing-kicker, .hero .hero-eyebrow { color: #72E4D3 !important; }
+.landing-copy, .hero .hero-sub { color: #C0CDDE !important; }
+.landing-aside { background: rgba(7,14,28,.30) !important; border: 1px solid rgba(184,202,226,.19) !important; border-radius: 16px !important; backdrop-filter: blur(10px) !important; }
+.landing-aside-title { color: #73E4D3 !important; }
+.landing-question { border-bottom-color: rgba(184,202,226,.14) !important; }
+.landing-question-title, .landing-route-title { color: #F0F5FC !important; }
+.landing-question-copy, .landing-route-copy { color: #AEBED1 !important; }
+.landing-route-num { background: rgba(85,215,196,.13) !important; color: #79E8D7 !important; }
+.landing-chip, .hero-chip {
+  background: rgba(255,255,255,.065) !important;
+  border: 1px solid rgba(197,213,235,.20) !important;
+  color: #E5EDF8 !important;
+  border-radius: 999px !important;
+  padding: .4rem .75rem !important;
+}
+.hero .hero-title { color: #F5F8FD !important; }
+.hero-meta { gap: .55rem; }
+
+/* Feature cards, stats and insight tiles */
+.landing-stat, .landing-feature, .landing-workflow,
+.kpi-card, .insight-grid-card, .control-deck, .info-panel,
+.empty-state, div[data-testid="stPlotlyChart"],
+div[data-testid="stDataFrame"], [data-testid="stTable"] {
+  background: linear-gradient(155deg, rgba(21,34,55,.96), rgba(15,27,46,.96)) !important;
+  border: 1px solid rgba(117,145,181,.20) !important;
+  color: #D7E1EF !important;
+  border-radius: 15px !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,.15), inset 0 1px 0 rgba(255,255,255,.025) !important;
+}
+.landing-stat, .landing-feature, .landing-workflow { padding: 1.05rem 1.15rem !important; }
+.landing-feature { transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease !important; }
+.landing-feature:hover, .landing-stat:hover, .landing-workflow:hover,
+.kpi-card:hover, .insight-grid-card:hover {
+  transform: translateY(-3px) !important;
+  border-color: rgba(85,215,196,.42) !important;
+  box-shadow: 0 16px 36px rgba(0,0,0,.24), 0 0 0 1px rgba(85,215,196,.05) !important;
+}
+.landing-feature-icon, .insight-mark, .empty-state-mark {
+  background: rgba(85,215,196,.13) !important;
+  color: #6CE1D0 !important;
+  border: 1px solid rgba(85,215,196,.18) !important;
+  border-radius: 11px !important;
+}
+.landing-stat-label, .kpi-label, .insight-label { color: #91A3BA !important; }
+.landing-stat-value, .kpi-value { color: #F2F6FC !important; }
+.landing-stat-foot, .landing-feature-copy, .landing-workflow-copy,
+.kpi-foot, .panel-note, .control-deck-sub { color: #91A1B7 !important; }
+.landing-section-title, .landing-workflow-title, .landing-feature-title { color: #EAF1FA !important; }
+.landing-section-copy { color: #9CAEC3 !important; }
+.landing-footnote, .callout {
+  background: rgba(245,177,92,.10) !important;
+  border: 1px solid rgba(245,177,92,.27) !important;
+  color: #F3CC91 !important;
   border-radius: 12px !important;
-  box-shadow: 0 3px 12px rgba(31, 41, 55, .04) !important;
-  animation: none !important;
 }
-.landing-hero:before { display: none !important; }
-.landing-brand, .landing-brand-mark { color: var(--pt-text) !important; }
-.landing-brand-mark {
-  background: var(--pt-accent-soft) !important;
-  color: var(--pt-accent) !important;
-  border: 1px solid #F5D6C9 !important;
-  border-radius: 8px !important;
-}
-.landing-brand small, .landing-top-status,
-.landing-copy, .landing-stat-foot, .landing-section-copy,
-.landing-feature-copy, .landing-workflow-copy,
-.landing-bottom { color: var(--pt-muted) !important; }
-.landing-kicker, .landing-aside-title,
-.landing-workflow-num { color: var(--pt-accent) !important; }
-.landing-title { color: var(--pt-text) !important; font-size: clamp(2rem, 4vw, 3.2rem) !important; line-height: 1.12 !important; }
-.landing-title span { color: var(--pt-accent) !important; }
-.landing-aside {
-  background: var(--pt-soft) !important;
-  border: 1px solid var(--pt-border) !important;
-  border-radius: 10px !important;
-  backdrop-filter: none !important;
-}
-.landing-question { border-bottom-color: var(--pt-border) !important; }
-.landing-question-title { color: var(--pt-text) !important; }
-.landing-question-copy { color: var(--pt-muted) !important; }
-.landing-chip {
-  background: var(--pt-soft) !important;
-  border: 1px solid var(--pt-border) !important;
-  color: #4B5563 !important;
-  border-radius: 6px !important;
-}
-.landing-stat, .landing-feature, .landing-workflow {
-  background: #FFFFFF !important;
-  border: 1px solid var(--pt-border) !important;
-  border-radius: 9px !important;
-  box-shadow: none !important;
-}
-.landing-feature:hover { transform: none !important; box-shadow: 0 4px 12px rgba(31,41,55,.06) !important; border-color: #D1D5DB !important; }
-.landing-feature-icon { background: var(--pt-accent-soft) !important; color: var(--pt-accent) !important; }
-.landing-stat-label, .landing-workflow-title, .landing-feature-title,
-.landing-section-title { color: var(--pt-text) !important; }
-.landing-stat-value { color: var(--pt-text) !important; }
-.landing-footnote { background: #FFFBEB !important; border-color: #FDE68A !important; color: #78350F !important; }
+.kpi-card { border-top: 2px solid var(--pt-accent) !important; min-height: 128px; }
+.kpi-label { text-decoration-color: rgba(145,161,183,.65) !important; }
+.insight-text { color: #D6E1EF !important; }
+.control-deck { background: linear-gradient(145deg, rgba(20,34,56,.98), rgba(14,26,44,.98)) !important; padding: 1.1rem 1.2rem .5rem !important; }
+.control-deck-title, .section-title { color: #F0F5FC !important; }
+.section-note { color: #97A9BF !important; }
+.scope-strip { background: rgba(85,215,196,.075) !important; border: 1px solid rgba(85,215,196,.19) !important; color: #C2D2E2 !important; border-radius: 11px !important; }
+.scope-pill { background: rgba(255,255,255,.06) !important; border: 1px solid rgba(166,188,217,.18) !important; color: #E1EAF5 !important; border-radius: 999px !important; }
+.scope-pill-status { background: rgba(54,201,149,.13) !important; border-color: rgba(54,201,149,.28) !important; color: #7CE0B7 !important; }
+.scope-pill-muted { color: #91A1B7 !important; }
+.info-panel { border-left: 3px solid var(--pt-accent) !important; }
+.info-panel b, .empty-state-title { color: #F0F5FC !important; }
+.info-panel, .empty-state-message { color: #B4C3D6 !important; }
+.empty-state { border-style: dashed !important; border-left: 3px solid var(--pt-accent) !important; }
+.empty-state-action { color: #70E2D1 !important; }
 
-/* White page headers and content cards. */
-.workspace-masthead { border-bottom-color: var(--pt-border) !important; }
-.workspace-monogram {
-  background: var(--pt-accent-soft) !important;
-  color: var(--pt-accent) !important;
-  border: 1px solid #F5D6C9 !important;
-  border-radius: 9px !important;
-}
-.workspace-brandname, .workspace-current-title { color: var(--pt-text) !important; }
-.workspace-brandname span, .workspace-overline,
-.workspace-current-label, .navbar-kicker,
-.section-kicker { color: var(--pt-accent) !important; }
-.workspace-current-copy, .navbar-hint, .section-note { color: var(--pt-muted) !important; }
-.hero {
-  background: #FFFFFF !important;
-  color: var(--pt-text) !important;
-  border: 1px solid var(--pt-border) !important;
-  border-left: 4px solid var(--pt-accent) !important;
+/* Buttons and interactive controls */
+div[data-testid="stButton"] > button,
+[data-testid="stDownloadButton"] button,
+[data-testid="stFormSubmitButton"] button {
+  background: linear-gradient(145deg, #1B2A43, #15243B) !important;
+  color: #DCE7F4 !important;
+  border: 1px solid #344966 !important;
   border-radius: 10px !important;
-  box-shadow: none !important;
-  animation: none !important;
+  min-height: 2.55rem;
+  font-family: 'DM Sans', sans-serif !important;
+  font-weight: 700 !important;
+  box-shadow: 0 5px 14px rgba(0,0,0,.12) !important;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease !important;
 }
-.hero .hero-eyebrow { color: var(--pt-accent) !important; }
-.hero .hero-title { color: var(--pt-text) !important; font-size: 2rem !important; }
-.hero .hero-sub { color: #4B5563 !important; }
-.hero-chip {
-  background: var(--pt-soft) !important;
-  border: 1px solid var(--pt-border) !important;
-  color: #4B5563 !important;
-}
-.navbar-divider, hr { border-color: var(--pt-border) !important; background: var(--pt-border) !important; }
-
-/* Simpler buttons, form controls, and neutral content surfaces. */
-div[data-testid="stButton"] > button {
-  background: #FFFFFF !important;
-  color: #374151 !important;
-  border: 1px solid #D1D5DB !important;
-  border-radius: 7px !important;
-  box-shadow: none !important;
-  font-family: Arial, Helvetica, sans-serif !important;
-  font-weight: 600 !important;
-  transition: background .15s ease, border-color .15s ease !important;
-}
-div[data-testid="stButton"] > button:hover {
-  background: #F9FAFB !important;
-  color: var(--pt-text) !important;
-  border-color: #9CA3AF !important;
-  transform: none !important;
-  box-shadow: none !important;
+div[data-testid="stButton"] > button:hover,
+[data-testid="stDownloadButton"] button:hover,
+[data-testid="stFormSubmitButton"] button:hover {
+  transform: translateY(-2px) !important;
+  border-color: rgba(85,215,196,.65) !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 9px 22px rgba(0,0,0,.22), 0 0 0 1px rgba(85,215,196,.08) !important;
 }
 div[data-testid="stButton"] > button[kind="primary"],
-button[kind="primary"] {
-  background: var(--pt-accent) !important;
-  border-color: var(--pt-accent) !important;
-  color: #FFFFFF !important;
+[data-testid="stDownloadButton"] button[kind="primary"], button[kind="primary"] {
+  background: linear-gradient(135deg, #58DDC9, #35BFAE) !important;
+  border: 1px solid #62E5D2 !important;
+  color: #08201F !important;
+  box-shadow: 0 7px 20px rgba(53,191,174,.20) !important;
 }
 div[data-testid="stButton"] > button[kind="primary"]:hover,
-button[kind="primary"]:hover {
-  background: #C85B37 !important;
-  border-color: #C85B37 !important;
-  color: #FFFFFF !important;
+[data-testid="stDownloadButton"] button[kind="primary"]:hover,
+button[kind="primary"]:hover { background: linear-gradient(135deg, #78E9D8, #4ACDBB) !important; color: #061B1B !important; }
+[data-baseweb="select"] > div,
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stDateInput"] input {
+  background: #0D192B !important;
+  border: 1px solid #30445F !important;
+  border-radius: 10px !important;
+  color: #E7EEF8 !important;
 }
-[data-baseweb="select"] > div, [data-testid="stTextInput"] input,
-[data-testid="stNumberInput"] input, [data-testid="stTextArea"] textarea {
-  background: #FFFFFF !important;
-  border-color: #D1D5DB !important;
-  border-radius: 7px !important;
-  color: var(--pt-text) !important;
+[data-baseweb="select"] > div:hover,
+[data-testid="stTextInput"] input:hover,
+[data-testid="stNumberInput"] input:hover { border-color: #4B6689 !important; }
+[data-baseweb="select"] *, [data-baseweb="popover"] *, [role="listbox"] * { color: #DCE7F4 !important; }
+[data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] {
+  background: #142238 !important;
+  border: 1px solid #344966 !important;
 }
-[data-baseweb="tag"] { background: var(--pt-accent) !important; }
+[data-baseweb="option"] { background: #142238 !important; }
+[data-baseweb="option"]:hover, [aria-selected="true"] { background: #203652 !important; }
+[data-baseweb="tag"] { background: #1F716B !important; border-radius: 7px !important; }
+[data-baseweb="tag"] span { color: #E9FFFB !important; }
+input::placeholder, textarea::placeholder { color: #71849D !important; }
 [data-testid="stForm"], [data-testid="stExpander"] {
-  background: #FFFFFF !important;
-  border: 1px solid var(--pt-border) !important;
-  border-radius: 9px !important;
+  background: rgba(17,28,48,.86) !important;
+  border: 1px solid rgba(117,145,181,.22) !important;
+  border-radius: 13px !important;
 }
-[data-testid="stExpander"] details { background: #FFFFFF !important; }
-[data-testid="stDataFrame"], [data-testid="stTable"] {
-  border: 1px solid var(--pt-border) !important;
-  border-radius: 8px !important;
-  overflow: hidden !important;
-}
-.kpi-card, .insight-grid-card, div[data-testid="stPlotlyChart"] {
-  background: #FFFFFF !important;
-  border-color: var(--pt-border) !important;
-  border-radius: 9px !important;
-  box-shadow: none !important;
-  animation: none !important;
-}
-.kpi-card:hover, .insight-grid-card:hover, div[data-testid="stPlotlyChart"]:hover {
-  transform: none !important;
-  box-shadow: 0 3px 10px rgba(31,41,55,.05) !important;
-}
-.kpi-label, .insight-label, .landing-stat-label { color: var(--pt-muted) !important; }
-.kpi-value, .insight-text, .section-title, .control-deck-title { color: var(--pt-text) !important; }
-.kpi-foot, .panel-note, .control-deck-sub { color: var(--pt-muted) !important; }
-.control-deck { background: #FFFFFF !important; border-color: var(--pt-border) !important; border-radius: 9px !important; box-shadow: none !important; }
-.scope-strip { background: var(--pt-soft) !important; border-color: var(--pt-border) !important; color: #4B5563 !important; }
-.scope-pill { background: #FFFFFF !important; border-color: var(--pt-border) !important; color: #374151 !important; }
-.info-panel { background: #F8FAFC !important; border-color: var(--pt-border) !important; border-left-color: var(--pt-accent) !important; color: #4B5563 !important; }
-.info-panel b { color: var(--pt-text) !important; }
-.empty-state { background: #FFFFFF !important; border-color: #D1D5DB !important; border-left-color: var(--pt-accent) !important; box-shadow: none !important; }
-.empty-state-title { color: var(--pt-text) !important; }
-.empty-state-message { color: var(--pt-muted) !important; }
-.empty-state-mark { background: var(--pt-accent-soft) !important; color: var(--pt-accent) !important; }
-.callout { background: #FFFBEB !important; border-color: #FDE68A !important; color: #78350F !important; }
+[data-testid="stExpander"] details, [data-testid="stExpander"] summary { background: transparent !important; color: #DCE7F4 !important; }
+[data-testid="stExpander"] svg { fill: #AFC0D5 !important; }
+[data-testid="stDataFrame"] { border-radius: 13px !important; overflow: hidden !important; }
+
+/* Chart frames, data areas and typography */
+div[data-testid="stPlotlyChart"] { padding: .4rem .42rem .08rem !important; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease !important; }
+div[data-testid="stPlotlyChart"]:hover { transform: translateY(-2px) !important; border-color: rgba(85,215,196,.36) !important; }
+[data-testid="stDataFrame"] [role="grid"], [data-testid="stTable"] { color: #DCE7F4 !important; }
+[data-testid="stDataFrame"] { background: #111C30 !important; }
+[data-testid="stMarkdownContainer"] table { border-color: #30445F !important; }
+[data-testid="stMarkdownContainer"] th { background: #1A2B44 !important; color: #EAF1FA !important; }
+[data-testid="stMarkdownContainer"] td { background: #111C30 !important; color: #C8D5E5 !important; }
+code, pre { background: #0A1425 !important; color: #BCEDE5 !important; border: 1px solid #263750 !important; border-radius: 8px !important; }
+a { color: #75E2D2 !important; }
+a:hover { color: #A5F3E7 !important; }
 button:focus-visible, [data-baseweb="select"] > div:focus-within,
 [data-testid="stTextInput"] input:focus-visible {
   outline: 2px solid var(--pt-accent) !important;
   outline-offset: 2px !important;
 }
+@keyframes softGlow { 0%,100% { box-shadow: 0 0 0 rgba(85,215,196,0); } 50% { box-shadow: 0 0 24px rgba(85,215,196,.08); } }
+@media (max-width: 900px) {
+  .landing-hero { grid-template-columns: 1fr !important; gap: 1.3rem !important; }
+  .landing-title { font-size: 2.55rem !important; }
+  .landing-aside { padding: 1rem !important; }
+  .hero .hero-title { font-size: 1.9rem !important; }
+  .kpi-value { font-size: 1.5rem !important; }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -671,19 +718,19 @@ def empty_state(title, message, next_step=None):
 
 def style_fig(fig, height=360, legend=True):
     fig.update_layout(
-        template="plotly_white",
+        template="plotly_dark",
         height=height,
         margin=dict(l=18, r=28, t=40, b=24),
-        paper_bgcolor="rgba(255,255,255,0)",
-        plot_bgcolor="rgba(255,255,255,0)",
-        font=dict(family="Arial, Helvetica, sans-serif", color="#4B5563", size=12),
-        hoverlabel=dict(bgcolor="#FFFFFF", font_color="#1F2937", bordercolor="#D1D5DB"),
-        legend=dict(font=dict(color="#4B5563", size=11), bgcolor="rgba(255,255,255,0)"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="DM Sans, sans-serif", color="#D4DFED", size=12),
+        hoverlabel=dict(bgcolor="#17263D", font_color="#F1F6FC", bordercolor="#3B5675"),
+        legend=dict(font=dict(color="#B8C7D9", size=11), bgcolor="rgba(0,0,0,0)"),
         showlegend=legend,
         transition=dict(duration=260, easing="cubic-in-out"),
     )
-    fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#D1D5DB", ticks="outside")
-    fig.update_yaxes(showgrid=True, gridcolor="#F1F3F5", zeroline=False, linecolor="#D1D5DB", ticks="outside")
+    fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#3B4F6A", tickfont=dict(color="#A9B9CC"), title_font=dict(color="#C2CFDE"), ticks="outside")
+    fig.update_yaxes(showgrid=True, gridcolor="rgba(139,160,188,.16)", zeroline=False, linecolor="#3B4F6A", tickfont=dict(color="#A9B9CC"), title_font=dict(color="#C2CFDE"), ticks="outside")
     return fig
 
 
@@ -1619,7 +1666,7 @@ if page == "Overview":
             else:
                 color_field = "Trade Flow"
                 chart_labels = {"Value_USD_Bn": "Value (US$ billion)", "Month": "Month", "Trade Flow": "Period"}
-                chart_colors = ["#B7C1CA", TEAL]
+                chart_colors = ["#71849B", TEAL]
 
             if selected_trend_style == "Area":
                 fig = px.area(line_data, x="Month", y="Value_USD_Bn", color=color_field,
@@ -1719,7 +1766,7 @@ if page == "Overview":
             })
             fig = px.bar(
                 scenario_plot, x="Scenario", y="Value (US$ billion)", color="Scenario",
-                color_discrete_sequence=["#B7C1CA", TEAL], text="Value (US$ billion)",
+                color_discrete_sequence=["#71849B", TEAL], text="Value (US$ billion)",
                 labels={"Value (US$ billion)": "Value (US$ billion)"},
             )
             fig.update_traces(texttemplate="US$%{y:.2f}B", textposition="outside", cliponaxis=False,
@@ -1756,7 +1803,7 @@ elif page == "Commodity breakdown":
             pivot["Balance (Exports − Imports)"] = pivot.get("Exports", 0) - pivot.get("Imports", 0)
             bal = pivot.reset_index().sort_values("Balance (Exports − Imports)")
             fig = px.bar(bal, x="Balance (Exports − Imports)", y="Commodity", orientation="h", color="Balance (Exports − Imports)",
-                         color_continuous_scale=[RED, "#E8E4DB", GREEN], labels={"Balance (Exports − Imports)": "Net balance (US$ billion)"})
+                         color_continuous_scale=[RED, "#24354B", GREEN], labels={"Balance (Exports − Imports)": "Net balance (US$ billion)"})
             fig.add_vline(x=0, line_dash="dash", line_color="#748394")
             fig.update_layout(coloraxis_showscale=False, xaxis_title="Exports minus imports (US$ billion)", yaxis_title="")
             render_chart(fig, "commodity_balance", 420, legend=False)
@@ -1779,7 +1826,7 @@ elif page == "Commodity breakdown":
             z=indexed.values,
             x=[pd.Timestamp(year=2000, month=int(m), day=1).strftime("%b") for m in indexed.columns],
             y=indexed.index.tolist(),
-            colorscale=[[0, "#F1EDE5"], [.65, "#6E9F93"], [1, TEAL]],
+            colorscale=[[0, "#14263C"], [.65, "#397F79"], [1, TEAL]],
             zmid=100,
             colorbar=dict(title="Index", thickness=13),
             hovertemplate="%{y}<br>%{x}<br>Index: %{z:.0f} (100 = category's own monthly average)<extra></extra>",
@@ -2452,15 +2499,15 @@ elif page == "Commodity deep dive":
         with left:
             if selected_trend_style == "Area":
                 fig = px.area(monthly_compare, x="Month", y="Value_USD_Bn", color="Period", markers=True,
-                              category_orders={"Month": month_labels}, color_discrete_sequence=["#B7C1CA", TEAL],
+                              category_orders={"Month": month_labels}, color_discrete_sequence=["#71849B", TEAL],
                               labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
             elif selected_trend_style == "Grouped bars":
                 fig = px.bar(monthly_compare, x="Month", y="Value_USD_Bn", color="Period", barmode="group",
-                             category_orders={"Month": month_labels}, color_discrete_sequence=["#B7C1CA", TEAL],
+                             category_orders={"Month": month_labels}, color_discrete_sequence=["#71849B", TEAL],
                              labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
             else:
                 fig = px.line(monthly_compare, x="Month", y="Value_USD_Bn", color="Period", markers=True,
-                              category_orders={"Month": month_labels}, color_discrete_sequence=["#B7C1CA", TEAL],
+                              category_orders={"Month": month_labels}, color_discrete_sequence=["#71849B", TEAL],
                               labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
                 fig.update_traces(line_width=3, marker_size=7)
             fig.update_layout(hovermode="x unified", legend_title_text="", xaxis_title="Month", yaxis_title="Value (US$ billion)")
@@ -2550,7 +2597,7 @@ elif page == "Commodity deep dive":
                 fig = px.scatter(
                     deep_growth, x="Current_USD_Bn", y="YoY change (%)", size="Current_USD_Bn",
                     color="YoY change (%)", hover_name="DisplayCountry", size_max=34,
-                    color_continuous_scale=[RED, "#E8E4DB", GREEN],
+                    color_continuous_scale=[RED, "#24354B", GREEN],
                     labels={"Current_USD_Bn": "Current value (US$ billion)", "YoY change (%)": "YoY change (%)"},
                 )
                 fig.add_hline(y=0, line_dash="dash", line_color=SLATE)
@@ -3388,7 +3435,7 @@ elif page == "Imports vs exports":
             balances = flow_by_commodity.pivot(index="Commodity", columns="Trade Flow", values="Value_USD_Bn").fillna(0)
             balances["Balance"] = balances.get("Exports", 0) - balances.get("Imports", 0)
             balances = balances.reset_index().sort_values("Balance")
-            fig = px.bar(balances, x="Balance", y="Commodity", orientation="h", color="Balance", color_continuous_scale=[RED, "#ECE8E0", GREEN],
+            fig = px.bar(balances, x="Balance", y="Commodity", orientation="h", color="Balance", color_continuous_scale=[RED, "#24354B", GREEN],
                          labels={"Balance": "Net balance (US$ billion)", "Commodity": "Commodity group"})
             fig.add_vline(x=0, line_dash="dash", line_color="#68727D")
             fig.update_layout(coloraxis_showscale=False, xaxis_title="Exports minus imports (US$ billion)", yaxis_title="")
@@ -3462,7 +3509,7 @@ elif page == "Partner markets":
             if market_monthly:
                 trend = pd.concat(market_monthly, ignore_index=True)
                 fig = px.line(trend, x="Month", y="Value_USD_Bn", color="Period", markers=True,
-                              category_orders={"Month": month_labels}, color_discrete_sequence=["#B7C1CA", TEAL],
+                              category_orders={"Month": month_labels}, color_discrete_sequence=["#71849B", TEAL],
                               labels={"Value_USD_Bn": "Value (US$ billion)", "Month": "Month"})
                 fig.update_traces(line_width=3, marker_size=7)
                 fig.update_layout(hovermode="x unified", legend_title_text="")
