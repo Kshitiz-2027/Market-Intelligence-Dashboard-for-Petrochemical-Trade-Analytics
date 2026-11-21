@@ -538,6 +538,80 @@ button:focus-visible, [data-baseweb="select"] > div:focus-within,
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* COMMIT 15: INTERACTIVE MICRO-INTERACTIONS */
+/* Compact arrow affordances appear only while a button is hovered. */
+div[data-testid="stButton"] > button,
+[data-testid="stDownloadButton"] button,
+[data-testid="stFormSubmitButton"] button {
+  position: relative !important;
+  overflow: hidden !important;
+  will-change: transform, box-shadow;
+}
+div[data-testid="stButton"] > button::after,
+[data-testid="stFormSubmitButton"] button::after {
+  content: "↗";
+  display: inline-block;
+  width: 0;
+  margin-left: 0;
+  opacity: 0;
+  transform: translateX(-5px);
+  font-size: .9em;
+  line-height: 1;
+  transition: width .18s ease, margin-left .18s ease, opacity .18s ease, transform .18s ease;
+}
+[data-testid="stDownloadButton"] button::after {
+  content: "↓";
+  display: inline-block;
+  width: 0;
+  margin-left: 0;
+  opacity: 0;
+  transform: translateY(-3px);
+  font-size: .95em;
+  line-height: 1;
+  transition: width .18s ease, margin-left .18s ease, opacity .18s ease, transform .18s ease;
+}
+div[data-testid="stButton"] > button:hover::after,
+[data-testid="stFormSubmitButton"] button:hover::after,
+[data-testid="stDownloadButton"] button:hover::after {
+  width: .9em;
+  margin-left: .35rem;
+  opacity: 1;
+  transform: translate(0, 0);
+}
+div[data-testid="stButton"] > button:active,
+[data-testid="stDownloadButton"] button:active,
+[data-testid="stFormSubmitButton"] button:active {
+  transform: translateY(0) scale(.975) !important;
+  box-shadow: 0 2px 7px rgba(0,0,0,.2) !important;
+  transition-duration: .07s !important;
+}
+div[data-testid="stButton"] > button:disabled,
+[data-testid="stDownloadButton"] button:disabled,
+[data-testid="stFormSubmitButton"] button:disabled {
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Plotly modebar controls get a subtle accent on hover. */
+div[data-testid="stPlotlyChart"] .modebar-btn {
+  border-radius: 7px !important;
+  transition: background .16s ease, transform .16s ease !important;
+}
+div[data-testid="stPlotlyChart"] .modebar-btn:hover {
+  background: rgba(85,215,196,.15) !important;
+  transform: translateY(-1px);
+}
+div[data-testid="stPlotlyChart"] .modebar-btn:hover path {
+  fill: #75E6D6 !important;
+}
+div[data-testid="stPlotlyChart"]:active {
+  transform: translateY(-1px) scale(.997) !important;
+  border-color: rgba(85,215,196,.72) !important;
+  box-shadow: 0 0 0 2px rgba(85,215,196,.10), 0 14px 34px rgba(0,0,0,.25) !important;
+  transition-duration: .08s !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -717,6 +791,20 @@ def empty_state(title, message, next_step=None):
 
 
 def style_fig(fig, height=360, legend=True):
+    # Give selectable bar/scatter marks a clear active state when clicked.
+    # Other Plotly trace types (pie, heatmap, treemap) retain their native behavior.
+    for trace in fig.data:
+        if trace.type == "bar":
+            trace.update(
+                selected=dict(marker=dict(color=TEAL, opacity=1)),
+                unselected=dict(marker=dict(opacity=.42)),
+            )
+        elif trace.type in {"scatter", "scattergl"}:
+            trace.update(
+                selected=dict(marker=dict(color=TEAL, opacity=1, size=11)),
+                unselected=dict(marker=dict(opacity=.28)),
+            )
+
     fig.update_layout(
         template="plotly_dark",
         height=height,
@@ -724,10 +812,12 @@ def style_fig(fig, height=360, legend=True):
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color="#D4DFED", size=12),
-        hoverlabel=dict(bgcolor="#17263D", font_color="#F1F6FC", bordercolor="#3B5675"),
+        hoverlabel=dict(bgcolor="#17263D", font_color="#F1F6FC", bordercolor="#55D7C4"),
         legend=dict(font=dict(color="#B8C7D9", size=11), bgcolor="rgba(0,0,0,0)"),
         showlegend=legend,
-        transition=dict(duration=260, easing="cubic-in-out"),
+        clickmode="event+select",
+        hovermode="closest",
+        transition=dict(duration=360, easing="cubic-in-out"),
     )
     fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#3B4F6A", tickfont=dict(color="#A9B9CC"), title_font=dict(color="#C2CFDE"), ticks="outside")
     fig.update_yaxes(showgrid=True, gridcolor="rgba(139,160,188,.16)", zeroline=False, linecolor="#3B4F6A", tickfont=dict(color="#A9B9CC"), title_font=dict(color="#C2CFDE"), ticks="outside")
