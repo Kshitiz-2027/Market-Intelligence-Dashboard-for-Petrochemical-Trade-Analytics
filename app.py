@@ -880,6 +880,148 @@ def named_rows(frame):
     return frame[~frame["CountryKey"].isin(EXCLUDED_MARKETS)].copy()
 
 
+def build_monthly_coverage(frame, selected_flow="All loaded flows"):
+    """Return a complete year-by-month coverage grid for the loaded source data.
+
+    Years come from the complete loaded dataset, even when a specific flow is
+    selected. Therefore, a year with no records for that flow remains visible
+    as a row of months with zero usable records.
+    """
+    columns = [
+        "Year", "MonthNum", "Month", "Record Count", "Named Markets",
+        "HS Chapters", "Trade Value (US$ Mn)", "Coverage Status",
+    ]
+    if frame.empty or "Year" not in frame.columns:
+        return pd.DataFrame(columns=columns)
+
+    all_years = sorted(pd.to_numeric(frame["Year"], errors="coerce").dropna().astype(int).unique().tolist())
+    if not all_years:
+        return pd.DataFrame(columns=columns)
+
+    if selected_flow == "All loaded flows":
+        scoped = frame.copy()
+    else:
+        scoped = frame[frame["Trade Flow"] == selected_flow].copy()
+
+    group_cols = ["Year", "MonthNum"]
+    records = (
+        scoped.groupby(group_cols, as_index=False)
+        .agg(
+            **{
+                "Record Count": ("Value_USD_Mn", "size"),
+                "HS Chapters": ("HS Code", "nunique"),
+                "Trade Value (US$ Mn)": ("Value_USD_Mn", "sum"),
+            }
+        )
+    )
+    market_counts = (
+        named_rows(scoped)
+        .groupby(group_cols)["DisplayCountry"]
+        .nunique()
+        .rename("Named Markets")
+        .reset_index()
+    )
+
+    full_grid = pd.MultiIndex.from_product(
+        [all_years, range(1, 13)], names=group_cols
+    ).to_frame(index=False)
+    coverage = full_grid.merge(records, on=group_cols, how="left")
+    coverage = coverage.merge(market_counts, on=group_cols, how="left")
+
+    for column in ["Record Count", "HS Chapters", "Named Markets"]:
+        coverage[column] = coverage[column].fillna(0).astype(int)
+    coverage["Trade Value (US$ Mn)"] = coverage["Trade Value (US$ Mn)"].fillna(0.0)
+    coverage["Month"] = coverage["MonthNum"].map(lambda month: MONTH_ORDER[int(month) - 1])
+    coverage["Coverage Status"] = np.where(
+        coverage["Record Count"] > 0, "Observed", "No usable records"
+    )
+    return coverage[columns].sort_values(
+        ["Year", "MonthNum"], kind="stable"
+    ).reset_index(drop=True)
+
+
+def build_coverage_heatmap(coverage):
+    """Create a Plotly heatmap of usable record counts by year and month."""
+    if coverage.empty:
+        return go.Figure()
+
+    years_in_view = sorted(coverage["Year"].astype(int).unique().tolist())
+    month_nums = list(range(1, 13))
+
+    def matrix_for(column):
+        return (
+            coverage.pivot(index="Year", columns="MonthNum", values=column)
+            .reindex(index=years_in_view, columns=month_nums)
+            .fillna(0)
+        )
+
+    records_matrix = matrix_for("Record Count").astype(int)
+    markets_matrix = matrix_for("Named Markets").astype(int)
+    chapters_matrix = matrix_for("HS Chapters").astype(int)
+    value_matrix = matrix_for("Trade Value (US$ Mn)")
+    count_values = records_matrix.to_numpy()
+    text_values = np.where(
+        count_values > 0,
+        np.vectorize(lambda value: f"{int(value):,}")(count_values),
+        "—",
+    )
+    custom_data = np.stack(
+        [
+            markets_matrix.to_numpy(),
+            chapters_matrix.to_numpy(),
+            value_matrix.to_numpy(),
+        ],
+        axis=-1,
+    )
+
+    figure = go.Figure(
+        go.Heatmap(
+            z=count_values,
+            x=MONTH_ORDER,
+            y=[str(year) for year in years_in_view],
+            text=text_values,
+            texttemplate="%{text}",
+            textfont={"size": 10, "color": "#EAF2FC"},
+            customdata=custom_data,
+            colorscale=[
+                [0.0, "#263750"],
+                [0.00001, "#174B4A"],
+                [0.35, "#247A70"],
+                [1.0, TEAL],
+            ],
+            zmin=0,
+            zmax=max(int(count_values.max()), 1),
+            xgap=4,
+            ygap=4,
+            colorbar={
+                "title": {"text": "Records", "font": {"color": "#C8D5E5"}},
+                "tickfont": {"color": "#A9B9CC"},
+                "outlinecolor": "#3B4F6A",
+            },
+            hovertemplate=(
+                "<b>%{y} · %{x}</b><br>"
+                "Usable records: %{z:,.0f}<br>"
+                "Named markets: %{customdata[0]:,.0f}<br>"
+                "HS chapters: %{customdata[1]:,.0f}<br>"
+                "Recorded value: US$ %{customdata[2]:,.1f} Mn"
+                "<extra></extra>"
+            ),
+        )
+    )
+    figure.update_layout(
+        title={
+            "text": "Usable source records by reporting month",
+            "x": 0.02,
+            "xanchor": "left",
+            "font": {"size": 15, "color": "#EAF1FA"},
+        },
+        height=max(360, min(720, 185 + len(years_in_view) * 38)),
+    )
+    figure.update_xaxes(side="top", title="Reporting month")
+    figure.update_yaxes(autorange="reversed", title="Reporting year")
+    return figure
+
+
 def compact_height(rows, min_height=120, max_height=440):
     return min(max_height, max(min_height, 42 + rows * 35))
 
@@ -2205,7 +2347,7 @@ elif page == "Commodity breakdown":
             # Comparison KPI cards
             # ----------------------------------------------------
 
-            
+
             # ----------------------------------------------------
             # COMMIT 06: FOUR-CARD COMPARISON KPI STRIP
             # ----------------------------------------------------
@@ -2395,7 +2537,7 @@ elif page == "Commodity breakdown":
                 ]
             ].copy()
 
-        
+
             # ====================================================
             # COMMIT 07: CUSTOM COMMODITY SORTING
             # ====================================================
@@ -4241,6 +4383,114 @@ else:
                 "This avoids comparing a partial year against a full year. If the prior-period denominator is zero or missing, percentage growth is left unavailable."
             )
             st.caption("These notes explain the calculations; they do not indicate a data error by themselves.")
+
+    # ============================================================
+    # COMMIT 18: MONTHLY DATA COVERAGE MONITOR
+    # ============================================================
+    st.write("")
+    section(
+        "SOURCE COVERAGE",
+        "Monthly data coverage",
+        "See which reporting months contain usable records across the loaded source years.",
+    )
+    coverage_control, coverage_note = st.columns([1.15, 2.85], gap="medium")
+    with coverage_control:
+        coverage_flow_options = ["All loaded flows"] + available_flows
+        selected_coverage_flow = st.selectbox(
+            "Trade-flow scope",
+            options=coverage_flow_options,
+            index=0,
+            key="monthly_coverage_flow_scope",
+            help="Choose all loaded records or inspect one direction label separately.",
+        )
+    with coverage_note:
+        st.caption(
+            "Coverage is calculated from all loaded source records and is independent "
+            "of the dashboard's current market, commodity and month filters. A month "
+            "with no usable records is not assumed to have zero trade."
+        )
+
+    monthly_coverage = build_monthly_coverage(data, selected_coverage_flow)
+    selected_year_coverage = monthly_coverage[
+        monthly_coverage["Year"] == selected_year
+    ].copy()
+    observed_months = int((selected_year_coverage["Record Count"] > 0).sum())
+    coverage_percent = observed_months / 12 * 100 if not selected_year_coverage.empty else 0.0
+    coverage_records = int(selected_year_coverage["Record Count"].sum())
+    coverage_markets = int(
+        named_rows(
+            data[
+                (data["Year"] == selected_year)
+                & (
+                    (data["Trade Flow"] == selected_coverage_flow)
+                    if selected_coverage_flow != "All loaded flows"
+                    else pd.Series(True, index=data.index)
+                )
+            ]
+        )["DisplayCountry"].nunique()
+    )
+
+    coverage_kpis = st.columns(4, gap="medium")
+    with coverage_kpis[0]:
+        kpi_card(
+            "MONTHS WITH RECORDS",
+            f"{observed_months} / 12",
+            f"Reporting year {selected_year}",
+            TEAL,
+        )
+    with coverage_kpis[1]:
+        kpi_card(
+            "MONTHLY COVERAGE",
+            f"{coverage_percent:.1f}%",
+            "Share of calendar months with usable records",
+            GREEN,
+        )
+    with coverage_kpis[2]:
+        kpi_card(
+            "USABLE SOURCE RECORDS",
+            f"{coverage_records:,}",
+            f"Selected flow scope · {selected_year}",
+            "#6FA7F8",
+        )
+    with coverage_kpis[3]:
+        kpi_card(
+            "NAMED MARKETS",
+            f"{coverage_markets:,}",
+            f"Markets represented in {selected_year}",
+            "#9A8CFF",
+        )
+
+    if monthly_coverage.empty:
+        empty_state(
+            "Monthly coverage is unavailable",
+            "No parsed source months are available for the selected flow scope.",
+            "Check the uploaded source files and their monthly USD_Mn columns.",
+        )
+    else:
+        coverage_figure = build_coverage_heatmap(monthly_coverage)
+        render_chart(
+            coverage_figure,
+            key="monthly_source_coverage_heatmap",
+            height=max(360, min(720, 185 + monthly_coverage["Year"].nunique() * 38)),
+            legend=False,
+        )
+        st.caption(
+            "Each cell shows the number of parsed observations for that year and month. "
+            "Hover over a cell for named-market count, HS chapter count and total recorded value."
+        )
+        st.download_button(
+            "Download monthly coverage summary",
+            data=monthly_coverage.to_csv(index=False).encode("utf-8-sig"),
+            file_name=(
+                "petrotrade_monthly_coverage_"
+                + re.sub(r"[^a-z0-9]+", "_", selected_coverage_flow.lower()).strip("_")
+                + ".csv"
+            ),
+            mime="text/csv",
+            type="secondary",
+            key="download_monthly_coverage_csv",
+        )
+
     search = st.text_input("Search country, commodity, category or HS code", placeholder="e.g. United States, plastics, chemical intermediates, 39")
     table = current[["Date", "Year", "Trade Flow", "Country Name", "HS Code", "HS Description", "Commodity", "Commodity Category", "Value_USD_Mn"]].copy()
     table = table.rename(columns={"Value_USD_Mn": "Value (US$ million)"})
