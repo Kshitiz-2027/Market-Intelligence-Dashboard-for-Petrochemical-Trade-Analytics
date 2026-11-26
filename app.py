@@ -880,146 +880,39 @@ def named_rows(frame):
     return frame[~frame["CountryKey"].isin(EXCLUDED_MARKETS)].copy()
 
 
-def build_monthly_coverage(frame, selected_flow="All loaded flows"):
-    """Return a complete year-by-month coverage grid for the loaded source data.
+def build_quarterly_summary(frame, selected_months):
+    """Aggregate selected monthly records into quarterly values by year.
 
-    Years come from the complete loaded dataset, even when a specific flow is
-    selected. Therefore, a year with no records for that flow remains visible
-    as a row of months with zero usable records.
+    The caller supplies the globally selected month numbers. Applying that
+    same month set to every year keeps historical quarter comparisons aligned.
     """
     columns = [
-        "Year", "MonthNum", "Month", "Record Count", "Named Markets",
-        "HS Chapters", "Trade Value (US$ Mn)", "Coverage Status",
+        "Year", "QuarterNum", "Quarter", "Value_USD_Mn", "Value_USD_Bn",
+        "Record Count", "Months Represented",
     ]
-    if frame.empty or "Year" not in frame.columns:
+    if frame.empty or not selected_months:
         return pd.DataFrame(columns=columns)
 
-    all_years = sorted(pd.to_numeric(frame["Year"], errors="coerce").dropna().astype(int).unique().tolist())
-    if not all_years:
+    scoped = frame.loc[frame["MonthNum"].isin(selected_months)].copy()
+    if scoped.empty:
         return pd.DataFrame(columns=columns)
 
-    if selected_flow == "All loaded flows":
-        scoped = frame.copy()
-    else:
-        scoped = frame[frame["Trade Flow"] == selected_flow].copy()
-
-    group_cols = ["Year", "MonthNum"]
-    records = (
-        scoped.groupby(group_cols, as_index=False)
+    scoped["QuarterNum"] = ((scoped["MonthNum"].astype(int) - 1) // 3) + 1
+    scoped["Quarter"] = "Q" + scoped["QuarterNum"].astype(str)
+    summary = (
+        scoped.groupby(["Year", "QuarterNum", "Quarter"], as_index=False)
         .agg(
+            Value_USD_Mn=("Value_USD_Mn", "sum"),
             **{
                 "Record Count": ("Value_USD_Mn", "size"),
-                "HS Chapters": ("HS Code", "nunique"),
-                "Trade Value (US$ Mn)": ("Value_USD_Mn", "sum"),
-            }
-        )
-    )
-    market_counts = (
-        named_rows(scoped)
-        .groupby(group_cols)["DisplayCountry"]
-        .nunique()
-        .rename("Named Markets")
-        .reset_index()
-    )
-
-    full_grid = pd.MultiIndex.from_product(
-        [all_years, range(1, 13)], names=group_cols
-    ).to_frame(index=False)
-    coverage = full_grid.merge(records, on=group_cols, how="left")
-    coverage = coverage.merge(market_counts, on=group_cols, how="left")
-
-    for column in ["Record Count", "HS Chapters", "Named Markets"]:
-        coverage[column] = coverage[column].fillna(0).astype(int)
-    coverage["Trade Value (US$ Mn)"] = coverage["Trade Value (US$ Mn)"].fillna(0.0)
-    coverage["Month"] = coverage["MonthNum"].map(lambda month: MONTH_ORDER[int(month) - 1])
-    coverage["Coverage Status"] = np.where(
-        coverage["Record Count"] > 0, "Observed", "No usable records"
-    )
-    return coverage[columns].sort_values(
-        ["Year", "MonthNum"], kind="stable"
-    ).reset_index(drop=True)
-
-
-def build_coverage_heatmap(coverage):
-    """Create a Plotly heatmap of usable record counts by year and month."""
-    if coverage.empty:
-        return go.Figure()
-
-    years_in_view = sorted(coverage["Year"].astype(int).unique().tolist())
-    month_nums = list(range(1, 13))
-
-    def matrix_for(column):
-        return (
-            coverage.pivot(index="Year", columns="MonthNum", values=column)
-            .reindex(index=years_in_view, columns=month_nums)
-            .fillna(0)
-        )
-
-    records_matrix = matrix_for("Record Count").astype(int)
-    markets_matrix = matrix_for("Named Markets").astype(int)
-    chapters_matrix = matrix_for("HS Chapters").astype(int)
-    value_matrix = matrix_for("Trade Value (US$ Mn)")
-    count_values = records_matrix.to_numpy()
-    text_values = np.where(
-        count_values > 0,
-        np.vectorize(lambda value: f"{int(value):,}")(count_values),
-        "—",
-    )
-    custom_data = np.stack(
-        [
-            markets_matrix.to_numpy(),
-            chapters_matrix.to_numpy(),
-            value_matrix.to_numpy(),
-        ],
-        axis=-1,
-    )
-
-    figure = go.Figure(
-        go.Heatmap(
-            z=count_values,
-            x=MONTH_ORDER,
-            y=[str(year) for year in years_in_view],
-            text=text_values,
-            texttemplate="%{text}",
-            textfont={"size": 10, "color": "#EAF2FC"},
-            customdata=custom_data,
-            colorscale=[
-                [0.0, "#263750"],
-                [0.00001, "#174B4A"],
-                [0.35, "#247A70"],
-                [1.0, TEAL],
-            ],
-            zmin=0,
-            zmax=max(int(count_values.max()), 1),
-            xgap=4,
-            ygap=4,
-            colorbar={
-                "title": {"text": "Records", "font": {"color": "#C8D5E5"}},
-                "tickfont": {"color": "#A9B9CC"},
-                "outlinecolor": "#3B4F6A",
+                "Months Represented": ("MonthNum", "nunique"),
             },
-            hovertemplate=(
-                "<b>%{y} · %{x}</b><br>"
-                "Usable records: %{z:,.0f}<br>"
-                "Named markets: %{customdata[0]:,.0f}<br>"
-                "HS chapters: %{customdata[1]:,.0f}<br>"
-                "Recorded value: US$ %{customdata[2]:,.1f} Mn"
-                "<extra></extra>"
-            ),
         )
     )
-    figure.update_layout(
-        title={
-            "text": "Usable source records by reporting month",
-            "x": 0.02,
-            "xanchor": "left",
-            "font": {"size": 15, "color": "#EAF1FA"},
-        },
-        height=max(360, min(720, 185 + len(years_in_view) * 38)),
-    )
-    figure.update_xaxes(side="top", title="Reporting month")
-    figure.update_yaxes(autorange="reversed", title="Reporting year")
-    return figure
+    summary["Value_USD_Bn"] = summary["Value_USD_Mn"] / 1000
+    return summary[columns].sort_values(
+        ["Year", "QuarterNum"], kind="stable"
+    ).reset_index(drop=True)
 
 
 def compact_height(rows, min_height=120, max_height=440):
@@ -2045,8 +1938,325 @@ if page == "Overview":
     fig.update_layout(showlegend=len(known_flows) > 1, yaxis_title="Value (US$ billion)", xaxis_title="Reporting period")
     render_chart(fig, "overview_annual_context", 360, legend=len(known_flows) > 1)
 
+    # COMMIT 18: QUARTERLY TRADE PERFORMANCE ANALYSIS
     st.write("")
-    section("03 / LEADING MARKETS", "Which named markets have the largest recorded values?", "Aggregate labels are excluded from the ranking. Change the live scope above to recalculate these rankings.")
+    section(
+        "03 / QUARTERLY PERFORMANCE",
+        "How does trade perform by quarter?",
+        "Compare quarterly recorded values, year-on-year movement and commodity contributions within the same selected reporting months.",
+    )
+    quarter_control, quarter_context = st.columns([1.15, 2.85], gap="medium")
+    with quarter_control:
+        quarter_flow_options = ["All loaded flows"] + available_flows
+        selected_quarter_flow = st.selectbox(
+            "Trade-flow scope",
+            options=quarter_flow_options,
+            index=0,
+            key="quarterly_performance_flow_scope",
+            help="Choose all loaded records or inspect one direction label separately.",
+        )
+    with quarter_context:
+        st.caption(
+            f"The analysis uses {', '.join(month_labels)} in every reporting year, "
+            f"with the current commodity and partner-market filters. The selected year "
+            f"({selected_year}) is compared with {prior_year}. Quarter values are not annualized."
+        )
+
+    quarterly_scope = base_filtered.copy()
+    if selected_quarter_flow != "All loaded flows":
+        quarterly_scope = quarterly_scope[
+            quarterly_scope["Trade Flow"] == selected_quarter_flow
+        ].copy()
+    quarterly_summary = build_quarterly_summary(quarterly_scope, months_present)
+
+    quarter_numbers = [1, 2, 3, 4]
+    quarter_labels = [f"Q{quarter}" for quarter in quarter_numbers]
+    selected_months_by_quarter = {
+        quarter: sum(1 for month_num in months_present if ((month_num - 1) // 3) + 1 == quarter)
+        for quarter in quarter_numbers
+    }
+    quarter_current = quarterly_summary[
+        quarterly_summary["Year"] == selected_year
+    ].copy() if not quarterly_summary.empty else pd.DataFrame()
+    quarter_prior = quarterly_summary[
+        quarterly_summary["Year"] == prior_year
+    ].copy() if not quarterly_summary.empty else pd.DataFrame()
+
+    current_lookup = (
+        quarter_current.set_index("QuarterNum").to_dict("index")
+        if not quarter_current.empty else {}
+    )
+    prior_lookup = (
+        quarter_prior.set_index("QuarterNum").to_dict("index")
+        if not quarter_prior.empty else {}
+    )
+
+    quarter_rows = []
+    for quarter_num in quarter_numbers:
+        current_item = current_lookup.get(quarter_num, {})
+        prior_item = prior_lookup.get(quarter_num, {})
+        current_value = current_item.get("Value_USD_Mn", np.nan)
+        prior_value = prior_item.get("Value_USD_Mn", np.nan)
+        selected_month_count = selected_months_by_quarter[quarter_num]
+        yoy_value = (
+            (current_value / prior_value - 1) * 100
+            if pd.notna(current_value) and pd.notna(prior_value) and prior_value > 0
+            else np.nan
+        )
+        if selected_month_count == 0:
+            selection_label = "Not in selected months"
+        elif selected_month_count < 3:
+            selection_label = f"Partial · {selected_month_count}/3 months"
+        else:
+            selection_label = "Full · 3/3 months"
+        quarter_rows.append(
+            {
+                "Quarter": f"Q{quarter_num}",
+                "Selection": selection_label,
+                "Months represented (selected year)": (
+                    f"{int(current_item.get('Months Represented', 0))}/{selected_month_count}"
+                    if selected_month_count else "—"
+                ),
+                "Current value (US$ B)": current_value / 1000 if pd.notna(current_value) else np.nan,
+                "Comparable prior (US$ B)": prior_value / 1000 if pd.notna(prior_value) else np.nan,
+                "YoY change (%)": yoy_value,
+                "_current_value_mn": current_value,
+            }
+        )
+    quarter_table = pd.DataFrame(quarter_rows)
+    selected_quarter_table = quarter_table[
+        quarter_table["Selection"] != "Not in selected months"
+    ].copy()
+    valid_current_quarters = selected_quarter_table[
+        selected_quarter_table["_current_value_mn"].notna()
+    ].copy()
+    valid_yoy_quarters = selected_quarter_table[
+        selected_quarter_table["YoY change (%)"].notna()
+    ].copy()
+
+    quarter_kpis = st.columns(4, gap="medium")
+    selected_period_quarter_total = (
+        float(quarter_current["Value_USD_Mn"].sum()) if not quarter_current.empty else np.nan
+    )
+    with quarter_kpis[0]:
+        kpi_card(
+            "SELECTED-PERIOD VALUE",
+            fmt_money_mn(selected_period_quarter_total),
+            f"{selected_year} · selected months only",
+            TEAL,
+        )
+    with quarter_kpis[1]:
+        best_quarter = (
+            valid_current_quarters.loc[valid_current_quarters["_current_value_mn"].idxmax()]
+            if not valid_current_quarters.empty else None
+        )
+        kpi_card(
+            "STRONGEST QUARTER",
+            best_quarter["Quarter"] if best_quarter is not None else "—",
+            fmt_money_mn(best_quarter["_current_value_mn"]) if best_quarter is not None else "No value available",
+            GREEN,
+        )
+    with quarter_kpis[2]:
+        weakest_quarter = (
+            valid_current_quarters.loc[valid_current_quarters["_current_value_mn"].idxmin()]
+            if not valid_current_quarters.empty else None
+        )
+        kpi_card(
+            "LOWEST-VALUE QUARTER",
+            weakest_quarter["Quarter"] if weakest_quarter is not None else "—",
+            fmt_money_mn(weakest_quarter["_current_value_mn"]) if weakest_quarter is not None else "No value available",
+            "#9A8CFF",
+        )
+    with quarter_kpis[3]:
+        best_yoy_quarter = (
+            valid_yoy_quarters.loc[valid_yoy_quarters["YoY change (%)"].idxmax()]
+            if not valid_yoy_quarters.empty else None
+        )
+        kpi_card(
+            "STRONGEST QUARTERLY YoY",
+            fmt_pct(best_yoy_quarter["YoY change (%)"]) if best_yoy_quarter is not None else "—",
+            f"{best_yoy_quarter['Quarter']} · vs. {prior_year}" if best_yoy_quarter is not None else "No positive prior-year baseline",
+            GREEN if best_yoy_quarter is not None and best_yoy_quarter["YoY change (%)"] >= 0 else RED,
+        )
+
+    if quarterly_summary.empty or selected_quarter_table.empty:
+        empty_state(
+            "Quarterly analysis is unavailable",
+            "No matching records were found for the selected flow, commodity, partner-market and month filters.",
+            "Choose another trade-flow scope or broaden the global analysis filters.",
+        )
+    else:
+        quarter_chart_col, quarter_history_col = st.columns([1.15, 1], gap="large")
+        with quarter_chart_col:
+            quarter_figure = go.Figure()
+            current_values = [
+                current_lookup.get(q, {}).get("Value_USD_Bn", np.nan)
+                for q in quarter_numbers
+            ]
+            prior_values = [
+                prior_lookup.get(q, {}).get("Value_USD_Bn", np.nan)
+                for q in quarter_numbers
+            ]
+            current_custom = [
+                [selected_months_by_quarter[q], current_lookup.get(q, {}).get("Months Represented", 0)]
+                for q in quarter_numbers
+            ]
+            prior_custom = [
+                [selected_months_by_quarter[q], prior_lookup.get(q, {}).get("Months Represented", 0)]
+                for q in quarter_numbers
+            ]
+            quarter_figure.add_trace(
+                go.Bar(
+                    name=f"{selected_year} selected",
+                    x=quarter_labels,
+                    y=current_values,
+                    customdata=current_custom,
+                    marker_color=TEAL,
+                    hovertemplate=(
+                        "%{x}<br>Value: US$%{y:,.2f}B<br>"
+                        "Months selected: %{customdata[0]}/3<br>"
+                        "Months represented in this selection: %{customdata[1]}<extra>%{fullData.name}</extra>"
+                    ),
+                )
+            )
+            quarter_figure.add_trace(
+                go.Bar(
+                    name=f"{prior_year} comparable",
+                    x=quarter_labels,
+                    y=prior_values,
+                    customdata=prior_custom,
+                    marker_color="#9A8CFF",
+                    hovertemplate=(
+                        "%{x}<br>Value: US$%{y:,.2f}B<br>"
+                        "Months selected: %{customdata[0]}/3<br>"
+                        "Months represented in this selection: %{customdata[1]}<extra>%{fullData.name}</extra>"
+                    ),
+                )
+            )
+            quarter_figure.update_layout(
+                title="Selected year vs. comparable prior year",
+                barmode="group",
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                yaxis_title="Recorded value (US$ billion)",
+            )
+            quarter_figure.update_yaxes(tickprefix="$", ticksuffix="B")
+            quarter_figure.update_xaxes(
+                categoryorder="array",
+                categoryarray=quarter_labels,
+                title="Quarter",
+            )
+            render_chart(quarter_figure, "overview_quarterly_current_vs_prior", 390)
+
+        with quarter_history_col:
+            all_quarter_years = sorted(quarterly_scope["Year"].dropna().astype(int).unique().tolist())
+            history_grid = pd.MultiIndex.from_product(
+                [all_quarter_years, quarter_numbers],
+                names=["Year", "QuarterNum"],
+            ).to_frame(index=False)
+            history_summary = history_grid.merge(
+                quarterly_summary[["Year", "QuarterNum", "Value_USD_Bn"]],
+                on=["Year", "QuarterNum"],
+                how="left",
+            )
+            history_summary["Quarter"] = "Q" + history_summary["QuarterNum"].astype(str)
+            history_summary.loc[
+                history_summary["QuarterNum"].map(selected_months_by_quarter) == 0,
+                "Value_USD_Bn",
+            ] = np.nan
+            history_figure = px.line(
+                history_summary,
+                x="Year",
+                y="Value_USD_Bn",
+                color="Quarter",
+                markers=True,
+                category_orders={"Quarter": quarter_labels},
+                color_discrete_sequence=[TEAL, "#9A8CFF", "#F2B66D", "#6FA7F8"],
+                labels={"Value_USD_Bn": "Recorded value (US$ billion)", "Year": "Reporting year"},
+            )
+            history_figure.update_traces(
+                connectgaps=False,
+                line=dict(width=2.6),
+                marker=dict(size=7),
+                hovertemplate="%{x}<br>US$%{y:,.2f}B<extra>%{fullData.name}</extra>",
+            )
+            history_figure.update_layout(
+                title="Quarterly trend across available years",
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                yaxis_title="Recorded value (US$ billion)",
+            )
+            history_figure.update_yaxes(tickprefix="$", ticksuffix="B")
+            render_chart(history_figure, "overview_quarterly_historical_trend", 390)
+
+        st.caption(
+            "A quarter is marked partial when fewer than three calendar months are included by the global month filter. "
+            "Months represented counts months with matching records after the selected filters; it is not a source-completeness certification. "
+            "A blank value means no matching records were found, not confirmed zero trade."
+        )
+
+        st.write("")
+        section(
+            "QUARTERLY COMPOSITION",
+            f"Which commodities contribute to each quarter in {selected_year}?",
+            "The chart uses the selected months and active commodity, partner-market and trade-flow scope.",
+        )
+        quarter_commodity = quarterly_scope[
+            (quarterly_scope["Year"] == selected_year)
+            & quarterly_scope["MonthNum"].isin(months_present)
+        ].copy()
+        if quarter_commodity.empty:
+            st.info("No commodity contributions are available for the selected year and trade-flow scope.")
+        else:
+            quarter_commodity["QuarterNum"] = ((quarter_commodity["MonthNum"].astype(int) - 1) // 3) + 1
+            quarter_commodity["Quarter"] = "Q" + quarter_commodity["QuarterNum"].astype(str)
+            quarter_commodity_summary = (
+                quarter_commodity.groupby(["QuarterNum", "Quarter", "Commodity"], as_index=False)["Value_USD_Bn"]
+                .sum()
+            )
+            quarter_commodity_figure = px.bar(
+                quarter_commodity_summary,
+                x="Quarter",
+                y="Value_USD_Bn",
+                color="Commodity",
+                barmode="stack",
+                category_orders={"Quarter": quarter_labels},
+                color_discrete_sequence=PALETTE,
+                labels={"Value_USD_Bn": "Recorded value (US$ billion)", "Quarter": "Quarter"},
+            )
+            quarter_commodity_figure.update_layout(
+                hovermode="x unified",
+                legend_title_text="Commodity",
+                legend=dict(orientation="h", yanchor="bottom", y=-.30, xanchor="left", x=0),
+                yaxis_title="Recorded value (US$ billion)",
+            )
+            quarter_commodity_figure.update_yaxes(tickprefix="$", ticksuffix="B")
+            render_chart(quarter_commodity_figure, "overview_quarterly_commodity_mix", 390)
+
+        st.write("")
+        section(
+            "QUARTERLY DETAIL",
+            "Quarter-by-quarter comparison",
+            f"The current period uses {selected_year}; the comparable period uses the same selected months in {prior_year}.",
+        )
+        visible_quarter_table = quarter_table.drop(columns=["_current_value_mn"])
+        st.dataframe(
+            visible_quarter_table,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Current value (US$ B)": st.column_config.NumberColumn(format="$%.3fB"),
+                "Comparable prior (US$ B)": st.column_config.NumberColumn(format="$%.3fB"),
+                "YoY change (%)": st.column_config.NumberColumn(format="%.1f%%"),
+            },
+        )
+        st.caption(
+            "Year-on-year growth is calculated only when the comparable prior-year quarter has a positive value. "
+            "When more than one direction-labelled flow is loaded, All loaded flows shows their combined recorded values, not a net trade balance."
+        )
+
+    st.write("")
+    section("04 / LEADING MARKETS", "Which named markets have the largest recorded values?", "Aggregate labels are excluded from the ranking. Change the live scope above to recalculate these rankings.")
     top_markets = partner_totals.head(top_partner_count).sort_values("Value_USD_Mn")
     if not top_markets.empty:
         top_markets["Value_USD_Bn"] = top_markets["Value_USD_Mn"] / 1000
@@ -4383,113 +4593,6 @@ else:
                 "This avoids comparing a partial year against a full year. If the prior-period denominator is zero or missing, percentage growth is left unavailable."
             )
             st.caption("These notes explain the calculations; they do not indicate a data error by themselves.")
-
-    # ============================================================
-    # COMMIT 18: MONTHLY DATA COVERAGE MONITOR
-    # ============================================================
-    st.write("")
-    section(
-        "SOURCE COVERAGE",
-        "Monthly data coverage",
-        "See which reporting months contain usable records across the loaded source years.",
-    )
-    coverage_control, coverage_note = st.columns([1.15, 2.85], gap="medium")
-    with coverage_control:
-        coverage_flow_options = ["All loaded flows"] + available_flows
-        selected_coverage_flow = st.selectbox(
-            "Trade-flow scope",
-            options=coverage_flow_options,
-            index=0,
-            key="monthly_coverage_flow_scope",
-            help="Choose all loaded records or inspect one direction label separately.",
-        )
-    with coverage_note:
-        st.caption(
-            "Coverage is calculated from all loaded source records and is independent "
-            "of the dashboard's current market, commodity and month filters. A month "
-            "with no usable records is not assumed to have zero trade."
-        )
-
-    monthly_coverage = build_monthly_coverage(data, selected_coverage_flow)
-    selected_year_coverage = monthly_coverage[
-        monthly_coverage["Year"] == selected_year
-    ].copy()
-    observed_months = int((selected_year_coverage["Record Count"] > 0).sum())
-    coverage_percent = observed_months / 12 * 100 if not selected_year_coverage.empty else 0.0
-    coverage_records = int(selected_year_coverage["Record Count"].sum())
-    coverage_markets = int(
-        named_rows(
-            data[
-                (data["Year"] == selected_year)
-                & (
-                    (data["Trade Flow"] == selected_coverage_flow)
-                    if selected_coverage_flow != "All loaded flows"
-                    else pd.Series(True, index=data.index)
-                )
-            ]
-        )["DisplayCountry"].nunique()
-    )
-
-    coverage_kpis = st.columns(4, gap="medium")
-    with coverage_kpis[0]:
-        kpi_card(
-            "MONTHS WITH RECORDS",
-            f"{observed_months} / 12",
-            f"Reporting year {selected_year}",
-            TEAL,
-        )
-    with coverage_kpis[1]:
-        kpi_card(
-            "MONTHLY COVERAGE",
-            f"{coverage_percent:.1f}%",
-            "Share of calendar months with usable records",
-            GREEN,
-        )
-    with coverage_kpis[2]:
-        kpi_card(
-            "USABLE SOURCE RECORDS",
-            f"{coverage_records:,}",
-            f"Selected flow scope · {selected_year}",
-            "#6FA7F8",
-        )
-    with coverage_kpis[3]:
-        kpi_card(
-            "NAMED MARKETS",
-            f"{coverage_markets:,}",
-            f"Markets represented in {selected_year}",
-            "#9A8CFF",
-        )
-
-    if monthly_coverage.empty:
-        empty_state(
-            "Monthly coverage is unavailable",
-            "No parsed source months are available for the selected flow scope.",
-            "Check the uploaded source files and their monthly USD_Mn columns.",
-        )
-    else:
-        coverage_figure = build_coverage_heatmap(monthly_coverage)
-        render_chart(
-            coverage_figure,
-            key="monthly_source_coverage_heatmap",
-            height=max(360, min(720, 185 + monthly_coverage["Year"].nunique() * 38)),
-            legend=False,
-        )
-        st.caption(
-            "Each cell shows the number of parsed observations for that year and month. "
-            "Hover over a cell for named-market count, HS chapter count and total recorded value."
-        )
-        st.download_button(
-            "Download monthly coverage summary",
-            data=monthly_coverage.to_csv(index=False).encode("utf-8-sig"),
-            file_name=(
-                "petrotrade_monthly_coverage_"
-                + re.sub(r"[^a-z0-9]+", "_", selected_coverage_flow.lower()).strip("_")
-                + ".csv"
-            ),
-            mime="text/csv",
-            type="secondary",
-            key="download_monthly_coverage_csv",
-        )
 
     search = st.text_input("Search country, commodity, category or HS code", placeholder="e.g. United States, plastics, chemical intermediates, 39")
     table = current[["Date", "Year", "Trade Flow", "Country Name", "HS Code", "HS Description", "Commodity", "Commodity Category", "Value_USD_Mn"]].copy()
