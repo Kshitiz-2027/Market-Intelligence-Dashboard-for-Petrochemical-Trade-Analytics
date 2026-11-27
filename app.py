@@ -880,6 +880,48 @@ def named_rows(frame):
     return frame[~frame["CountryKey"].isin(EXCLUDED_MARKETS)].copy()
 
 
+# COMMIT 19: TRADE VALUE CONTRIBUTION ANALYSIS
+def build_contribution_summary(current_frame, prior_frame, group_column):
+    """Compare current and prior values by a contributor dimension.
+
+    The result uses an outer join so contributors present in only one period
+    remain visible. Percentage growth is left unavailable when the prior value
+    is zero or missing; absolute change remains available.
+    """
+    required = {group_column, "Value_USD_Mn"}
+    for frame in (current_frame, prior_frame):
+        missing = required.difference(frame.columns)
+        if missing:
+            raise ValueError(
+                "Contribution analysis is missing required columns: "
+                + ", ".join(sorted(missing))
+            )
+
+    def aggregate(frame, value_name):
+        if frame.empty:
+            return pd.Series(dtype="float64", name=value_name)
+        scoped = frame.dropna(subset=[group_column]).copy()
+        if scoped.empty:
+            return pd.Series(dtype="float64", name=value_name)
+        return scoped.groupby(group_column)["Value_USD_Mn"].sum().rename(value_name)
+
+    current_values = aggregate(current_frame, "Current value (US$ M)")
+    prior_values = aggregate(prior_frame, "Prior value (US$ M)")
+    summary = pd.concat([current_values, prior_values], axis=1).fillna(0).reset_index()
+    summary = summary.rename(columns={group_column: "Contributor"})
+    summary["Change (US$ M)"] = (
+        summary["Current value (US$ M)"] - summary["Prior value (US$ M)"]
+    )
+    prior_positive = summary["Prior value (US$ M)"] > 0
+    summary["YoY change (%)"] = np.nan
+    summary.loc[prior_positive, "YoY change (%)"] = (
+        summary.loc[prior_positive, "Current value (US$ M)"]
+        / summary.loc[prior_positive, "Prior value (US$ M)"]
+        - 1
+    ) * 100
+    return summary.sort_values("Change (US$ M)", ascending=False).reset_index(drop=True)
+
+
 def build_quarterly_summary(frame, selected_months):
     """Aggregate selected monthly records into quarterly values by year.
 
@@ -2254,6 +2296,219 @@ if page == "Overview":
             "Year-on-year growth is calculated only when the comparable prior-year quarter has a positive value. "
             "When more than one direction-labelled flow is loaded, All loaded flows shows their combined recorded values, not a net trade balance."
         )
+
+    # COMMIT 19: TRADE VALUE CONTRIBUTION ANALYSIS
+    st.write("")
+    section(
+        "VALUE DRIVERS",
+        "What drove the year-on-year change?",
+        f"Decompose the recorded value movement from the comparable months in {prior_year} to {selected_year}. Positive contributors increase the total; negative contributors reduce it.",
+    )
+    driver_controls = st.columns([1.15, 1.15, 0.85], gap="medium")
+    with driver_controls[0]:
+        contribution_dimension = st.selectbox(
+            "Contribution breakdown",
+            ["Commodities", "Partner markets"],
+            key="contribution_dimension_main",
+            help="Choose whether to explain the value change by HS commodity chapter or by named partner market.",
+        )
+    with driver_controls[1]:
+        contribution_flow = st.selectbox(
+            "Trade flow",
+            ["All loaded flows"] + available_flows,
+            key="contribution_flow_main",
+            help="Choose one loaded flow or combine all loaded recorded values. Combined flows are not a net trade balance.",
+        )
+    with driver_controls[2]:
+        contribution_top_n = st.selectbox(
+            "Contributors to show",
+            [5, 10, 15, 20],
+            index=1,
+            key="contribution_top_n_main",
+            help="The largest contributors by absolute value change are shown individually; the remainder is grouped as Other.",
+        )
+
+    contribution_base = data[
+        data["Commodity"].isin(selected_commodities)
+        & data["Commodity Category"].isin(selected_categories)
+    ].copy()
+    if contribution_flow != "All loaded flows":
+        contribution_base = contribution_base[
+            contribution_base["Trade Flow"] == contribution_flow
+        ].copy()
+
+    contribution_current = contribution_base[
+        (contribution_base["Year"] == selected_year)
+        & contribution_base["MonthNum"].isin(months_present)
+    ].copy()
+    contribution_prior = contribution_base[
+        (contribution_base["Year"] == prior_year)
+        & contribution_base["MonthNum"].isin(months_present)
+    ].copy()
+
+    if contribution_dimension == "Commodities":
+        # Commodity analysis follows the active partner-market filter.
+        if selected_market != "All partner markets":
+            contribution_current = contribution_current[
+                contribution_current["DisplayCountry"] == selected_market
+            ].copy()
+            contribution_prior = contribution_prior[
+                contribution_prior["DisplayCountry"] == selected_market
+            ].copy()
+        contribution_group_column = "Commodity"
+        contribution_scope_note = (
+            f"Commodity contributions use the active partner-market scope: {selected_market}."
+            if selected_market != "All partner markets"
+            else "Commodity contributions use all named and other retained partner records in the active filters."
+        )
+    else:
+        # Partner contribution view intentionally scans all named markets so a
+        # single-market global filter does not collapse this comparison to one row.
+        contribution_current = named_rows(contribution_current)
+        contribution_prior = named_rows(contribution_prior)
+        contribution_group_column = "DisplayCountry"
+        contribution_scope_note = (
+            "Partner-market contributions scan all named markets; the global partner-market selector is not applied to this breakdown. "
+            "The selected reporting year, months, commodity chapters and trade-flow choice are still respected."
+        )
+
+    if contribution_current.empty:
+        st.info("No current-period records are available for this contribution selection. Try another flow or adjust the global filters.")
+    elif contribution_prior.empty:
+        st.info(
+            f"No comparable records were found for {prior_year} in this contribution selection. "
+            "Absolute year-on-year contributions cannot be calculated without a prior-period baseline."
+        )
+    else:
+        contribution_summary = build_contribution_summary(
+            contribution_current,
+            contribution_prior,
+            contribution_group_column,
+        )
+        if contribution_summary.empty:
+            st.info("No contributor groups are available for the selected period.")
+        else:
+            contribution_net_change = float(contribution_summary["Change (US$ M)"].sum())
+            positive_contributors = contribution_summary[
+                contribution_summary["Change (US$ M)"] > 0
+            ]
+            negative_contributors = contribution_summary[
+                contribution_summary["Change (US$ M)"] < 0
+            ]
+            best_positive = (
+                positive_contributors.sort_values("Change (US$ M)", ascending=False).iloc[0]
+                if not positive_contributors.empty else None
+            )
+            largest_negative = (
+                negative_contributors.sort_values("Change (US$ M)", ascending=True).iloc[0]
+                if not negative_contributors.empty else None
+            )
+
+            driver_kpis = st.columns(3, gap="medium")
+            with driver_kpis[0]:
+                kpi_card(
+                    "NET VALUE CHANGE",
+                    fmt_money_mn(contribution_net_change),
+                    f"{selected_year} vs. matching months in {prior_year}",
+                    GREEN if contribution_net_change >= 0 else RED,
+                )
+            with driver_kpis[1]:
+                kpi_card(
+                    "LARGEST POSITIVE CONTRIBUTOR",
+                    str(best_positive["Contributor"]) if best_positive is not None else "None",
+                    fmt_money_mn(best_positive["Change (US$ M)"]) if best_positive is not None else "No positive movement",
+                    GREEN,
+                )
+            with driver_kpis[2]:
+                kpi_card(
+                    "LARGEST NEGATIVE CONTRIBUTOR",
+                    str(largest_negative["Contributor"]) if largest_negative is not None else "None",
+                    fmt_money_mn(largest_negative["Change (US$ M)"]) if largest_negative is not None else "No negative movement",
+                    RED,
+                )
+
+            # Keep the chart readable while retaining the full net change:
+            # smaller groups are consolidated into a single Other bar.
+            ranked_contributors = contribution_summary.assign(
+                _absolute_change=contribution_summary["Change (US$ M)"].abs()
+            ).sort_values("_absolute_change", ascending=False)
+            visible_contributors = ranked_contributors.head(contribution_top_n).copy()
+            remaining_contributors = ranked_contributors.iloc[contribution_top_n:]
+            waterfall_rows = visible_contributors[
+                ["Contributor", "Current value (US$ M)", "Prior value (US$ M)", "Change (US$ M)"]
+            ].copy()
+            if not remaining_contributors.empty:
+                other_row = pd.DataFrame([{
+                    "Contributor": "Other contributors",
+                    "Current value (US$ M)": remaining_contributors["Current value (US$ M)"].sum(),
+                    "Prior value (US$ M)": remaining_contributors["Prior value (US$ M)"].sum(),
+                    "Change (US$ M)": remaining_contributors["Change (US$ M)"].sum(),
+                }])
+                waterfall_rows = pd.concat([waterfall_rows, other_row], ignore_index=True)
+            waterfall_rows = waterfall_rows.sort_values("Change (US$ M)", ascending=False)
+
+            waterfall_figure = go.Figure(
+                go.Waterfall(
+                    name="Contribution",
+                    orientation="v",
+                    measure=["relative"] * len(waterfall_rows) + ["total"],
+                    x=waterfall_rows["Contributor"].tolist() + ["Net change"],
+                    y=waterfall_rows["Change (US$ M)"].astype(float).tolist() + [contribution_net_change],
+                    text=[
+                        f"{value:+,.1f}M"
+                        for value in waterfall_rows["Change (US$ M)"].astype(float).tolist()
+                    ] + [f"{contribution_net_change:+,.1f}M"],
+                    textposition="outside",
+                    increasing={"marker": {"color": GREEN}},
+                    decreasing={"marker": {"color": RED}},
+                    totals={"marker": {"color": TEAL}},
+                    connector={"line": {"color": "#61758F", "width": 1}},
+                    hovertemplate="%{x}<br>Value change: US$%{y:,.1f}M<extra></extra>",
+                )
+            )
+            waterfall_figure.update_layout(
+                title="How each contributor adds to or reduces the net change",
+                showlegend=False,
+                yaxis_title="Change in recorded value (US$ million)",
+                xaxis_title="",
+                margin=dict(l=18, r=28, t=52, b=70),
+            )
+            waterfall_figure.update_yaxes(ticksuffix="M", zeroline=True, zerolinecolor="#60748D")
+            waterfall_figure.update_xaxes(tickangle=-18)
+            render_chart(waterfall_figure, "overview_value_contribution_waterfall", 440, legend=False)
+
+            contribution_table = contribution_summary[
+                [
+                    "Contributor",
+                    "Current value (US$ M)",
+                    "Prior value (US$ M)",
+                    "Change (US$ M)",
+                    "YoY change (%)",
+                ]
+            ].copy()
+            st.dataframe(
+                contribution_table,
+                use_container_width=True,
+                hide_index=True,
+                height=compact_height(len(contribution_table), max_height=420),
+                column_config={
+                    "Current value (US$ M)": st.column_config.NumberColumn(format="$%.1fM"),
+                    "Prior value (US$ M)": st.column_config.NumberColumn(format="$%.1fM"),
+                    "Change (US$ M)": st.column_config.NumberColumn(format="$%.1fM"),
+                    "YoY change (%)": st.column_config.NumberColumn(format="%.1f%%"),
+                },
+            )
+            st.caption(contribution_scope_note)
+            if contribution_flow == "All loaded flows" and len(available_flows) > 1:
+                st.caption(
+                    "All loaded flows combines the recorded values from each loaded source. "
+                    "It is not a net import/export balance."
+                )
+            st.caption(
+                "Absolute contribution is current-period value minus comparable prior-period value. "
+                "YoY percentage is unavailable when the prior-period group value is zero. "
+                "The chart groups smaller contributors into Other contributors when necessary; the table retains every group."
+            )
 
     st.write("")
     section("04 / LEADING MARKETS", "Which named markets have the largest recorded values?", "Aggregate labels are excluded from the ranking. Change the live scope above to recalculate these rankings.")
